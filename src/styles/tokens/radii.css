@@ -1,0 +1,21 @@
+:root {
+  /* ============================================================
+     INNOVO XPRESS — RADII & ELEVATION
+     Sharp, flat shape language. One real shadow tier (the modal).
+     ============================================================ */
+
+  /* Corner radii */
+  --radius-none: 0px;
+  --radius-xs:   6px;   /* status chips, checkbox */
+  --radius-sm:   9px;   /* buttons, inputs */
+  --radius-md:   11px;  /* modal */
+  --radius-lg:   14px;
+  --radius-pill: 20px;
+  --radius-full: 9999px; /* avatars, toggles */
+
+  /* Elevation — flat baseline + one modal tier + lighter dropdown tier */
+  --shadow-none: none;
+  --shadow-dropdown: 0 10px 34px rgba(26,26,46,.08);
+  --shadow-modal: 0 20px 60px rgba(26,26,46,.18);
+  --glow-primary: 0 4px 14px rgba(75,63,207,.26);
+}

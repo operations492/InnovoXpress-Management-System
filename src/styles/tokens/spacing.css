@@ -1,0 +1,21 @@
+:root {
+  /* ============================================================
+     INNOVO XPRESS — SPACING TOKENS
+     4px base with a 2px micro-step. Tuned tight for operator density.
+     ============================================================ */
+  --space-xxs: 2px;
+  --space-xs:  4px;
+  --space-sm:  6px;
+  --space-md:  8px;
+  --space-base:12px;
+  --space-lg:  16px;
+  --space-xl:  24px;
+  --space-xxl: 32px;
+  --space-section: 40px;
+
+  /* Layout constants */
+  --sidebar-width: 230px;
+  --sidebar-rail-width: 56px;
+  --topbar-height: 56px;
+  --content-max: 1600px;
+}

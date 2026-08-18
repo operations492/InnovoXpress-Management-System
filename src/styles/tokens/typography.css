@@ -1,0 +1,88 @@
+:root {
+  /* ============================================================
+     INNOVO XPRESS — TYPOGRAPHY TOKENS
+     One neutral enterprise sans across a compact, dense scale.
+     Hierarchy from weight + accent + hairlines, never large type.
+     ============================================================ */
+
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Unbounded', system-ui, sans-serif;
+  --font-mono: 'Sometype Mono', ui-monospace, 'SFMono-Regular', Consolas, monospace;
+
+  /* Weights */
+  --fw-regular: 400;  /* @kind other */
+  --fw-medium:  500;  /* @kind other */
+  --fw-semibold:600;  /* @kind other */
+  --fw-bold:    700;  /* @kind other */
+
+  /* Tabular numerals — keep table figures aligned */
+  --numeric-tabular: "tnum" 1;  /* @kind other */
+
+  /* --- Type scale (size / weight / line-height) --- */
+  /* page-title — topbar page title */
+  --type-page-title-size: 18px;
+  --type-page-title-weight: 600;
+  --type-page-title-lh: 1.3;
+
+  /* modal-title */
+  --type-modal-title-size: 17px;
+  --type-modal-title-weight: 600;
+  --type-modal-title-lh: 1.3;
+
+  /* section-title — form section heads */
+  --type-section-title-size: 15px;
+  --type-section-title-weight: 600;
+  --type-section-title-lh: 1.3;
+
+  /* table-header */
+  --type-table-header-size: 13px;
+  --type-table-header-weight: 600;
+  --type-table-header-lh: 1.2;
+  --type-table-header-tracking: 0.2px;
+
+  /* nav-label */
+  --type-nav-label-size: 14px;
+  --type-nav-label-weight: 500;
+  --type-nav-label-lh: 1.2;
+
+  /* tab-label */
+  --type-tab-label-size: 14px;
+  --type-tab-label-weight: 500;
+  --type-tab-label-lh: 1.2;
+
+  /* body-md */
+  --type-body-md-size: 14px;
+  --type-body-md-weight: 400;
+  --type-body-md-lh: 1.5;
+
+  /* body-sm — table cells, dense lists */
+  --type-body-sm-size: 13px;
+  --type-body-sm-weight: 400;
+  --type-body-sm-lh: 1.45;
+
+  /* form-label */
+  --type-form-label-size: 12px;
+  --type-form-label-weight: 600;
+  --type-form-label-lh: 1.3;
+
+  /* input-text */
+  --type-input-size: 13px;
+  --type-input-weight: 400;
+  --type-input-lh: 1.4;
+
+  /* button-md */
+  --type-button-size: 13px;
+  --type-button-weight: 500;
+  --type-button-lh: 1.2;
+
+  /* badge */
+  --type-badge-size: 11px;
+  --type-badge-weight: 600;
+  --type-badge-lh: 1.2;
+  --type-badge-tracking: 0.2px;
+
+  /* caption */
+  --type-caption-size: 12px;
+  --type-caption-weight: 400;
+  --type-caption-lh: 1.3;
+}

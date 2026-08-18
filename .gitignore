@@ -1,0 +1,43 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+*.tsbuildinfo
+
+# ---------------------------------------------------------------------------
+# Environment
+# ---------------------------------------------------------------------------
+# Vite's default template only ignores *.local, which does NOT match `.env` —
+# so without these lines the local .env is committed on the first `git add .`.
+#
+# Nothing secret belongs in here anyway: Vite inlines every VITE_* variable into
+# the shipped bundle, so `.env` holds only the API URL, the Supabase URL and the
+# publishable key, all of which are public by design. It is ignored regardless,
+# because a file that is safe today is the one someone drops a real key into
+# next month.
+.env
+.env.*
+!.env.example
+
+# Scratch copies made while changing the API base URL.
+.env.bak-*
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?

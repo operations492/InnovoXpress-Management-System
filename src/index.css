@@ -1,0 +1,258 @@
+/* Tailwind v4 + the Innovo Xpress Design System tokens.
+   The design-system token files are the single source of truth for every value;
+   Tailwind is mapped onto them (below) so utilities like `bg-canvas` / `text-ink`
+   resolve to the DS variables. Never hardcode a hex anywhere else. */
+
+/* Remote font import must precede all other rules — keep it first. */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sometype+Mono:wght@400;500;600&family=Unbounded:wght@600;700;800&display=swap');
+@import 'tailwindcss';
+
+@import './styles/tokens/colors.css';
+@import './styles/tokens/typography.css';
+@import './styles/tokens/spacing.css';
+@import './styles/tokens/radii.css';
+@import './styles/tokens/base.css';
+@import './styles/app-tokens.css';
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Map a focused set of DS tokens into Tailwind's color theme (inline = emit the
+   var() reference directly, so the DS variables stay authoritative). */
+@theme inline {
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+  --font-mono: var(--font-mono);
+
+  --color-primary: var(--iris-600);
+  --color-primary-hover: var(--iris-700);
+  --color-primary-active: var(--iris-800);
+  --color-primary-soft: var(--iris-50);
+  --color-accent: var(--accent);
+
+  --color-ink: var(--color-foreground);
+  --color-body: var(--body);
+  --color-muted: var(--muted);
+  --color-nav: var(--color-muted);
+
+  --color-canvas: var(--white);
+  --color-soft: var(--color-surface-soft);
+  --color-mutedbg: var(--color-border-subtle);
+  --color-adornment: var(--color-surface-soft);
+
+  --color-hairline: var(--color-border);
+  --color-control: var(--color-border-control);
+
+  --color-info: var(--status-info);
+  --color-success: var(--status-success);
+  --color-warning: var(--status-warning);
+  --color-danger: var(--status-danger);
+  --color-neutral: var(--status-neutral);
+  --color-cyan: var(--cyan-600);
+  --color-en-route: var(--status-en-route);
+  --color-arrived: var(--status-arrived);
+  --color-collected: var(--status-collected);
+  --font-heading: var(--font-display);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* App-wide layout defaults (the DS base.css owns body/typography resets). */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+/* App component helpers that need pseudo-states (inline styles cannot express :hover). */
+.ix-reset-btn {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.ix-dest {
+  color: var(--color-body);
+  text-align: left;
+}
+.ix-dest:hover {
+  text-decoration: underline dotted var(--color-muted);
+}
+.ix-driver-cell:hover {
+  color: var(--color-foreground) !important;
+}
+.ix-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  font-size: var(--type-body-sm-size);
+  color: var(--color-body);
+  text-align: left;
+}
+.ix-menu-item:hover {
+  background: var(--color-surface-soft);
+}
+.ix-clip {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ix-input:focus {
+  border-color: var(--color-ring);
+  outline: none;
+}
+
+/* Dual-handle range slider (time-of-day window). Two overlaid inputs; only the
+   thumbs are interactive so both handles are grabbable on the same track. */
+.ix-range {
+  -webkit-appearance: none;
+  appearance: none;
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 16px;
+  margin: 0;
+  background: transparent;
+  pointer-events: none;
+}
+.ix-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  pointer-events: auto;
+  width: 12px;
+  height: 12px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  border: 2px solid var(--color-background);
+  box-shadow: 0 0 0 1px var(--color-border-control);
+  cursor: pointer;
+}
+.ix-range::-moz-range-thumb {
+  pointer-events: auto;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--color-background);
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  cursor: pointer;
+}
+
+/* shadcn semantic tokens → pointed at the Iris DS tokens (single source of truth). */
+:root {
+  --background: var(--color-background);
+  --foreground: var(--color-foreground);
+  --card: #ffffff;
+  --card-foreground: var(--color-foreground);
+  --popover: #ffffff;
+  --popover-foreground: var(--color-foreground);
+  --primary: var(--color-primary);
+  --primary-foreground: var(--color-on-primary);
+  --secondary: var(--color-surface-soft);
+  --secondary-foreground: var(--color-foreground);
+  --muted: var(--color-surface-soft);
+  --muted-foreground: var(--color-muted);
+  --accent: var(--color-primary-soft);
+  --accent-foreground: var(--color-primary);
+  --destructive: var(--status-danger);
+  --border: var(--color-border);
+  --input: var(--color-border-control);
+  --ring: var(--color-primary);
+  --chart-1: var(--color-primary);
+  --chart-2: #7C3AED;
+  --chart-3: #0891B2;
+  --chart-4: #D97706;
+  --chart-5: #16A34A;
+  --radius: 0.625rem;
+  --sidebar: #ffffff;
+  --sidebar-foreground: var(--color-body);
+  --sidebar-primary: var(--color-primary);
+  --sidebar-primary-foreground: var(--color-on-primary);
+  --sidebar-accent: var(--color-primary-soft);
+  --sidebar-accent-foreground: var(--color-primary);
+  --sidebar-border: var(--color-border);
+  --sidebar-ring: var(--color-primary);
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.87 0 0);
+  --chart-2: oklch(0.556 0 0);
+  --chart-3: oklch(0.439 0 0);
+  --chart-4: oklch(0.371 0 0);
+  --chart-5: oklch(0.269 0 0);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.488 0.243 264.376);
+  --sidebar-primary-foreground: oklch(0.985 0 0);
+  --sidebar-accent: oklch(0.269 0 0);
+  --sidebar-accent-foreground: oklch(0.985 0 0);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
+}

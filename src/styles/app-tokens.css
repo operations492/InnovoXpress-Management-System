@@ -1,0 +1,15 @@
+/* App-level status tokens the design system does not ship.
+   The lifecycle has 8 states but the DS provides only 6 distinct status hues, so
+   the two "travelling" and two "arrived" states share a colour each — which also
+   reads correctly: the pair means the same thing at either end of the job.
+
+   Kept as vars so domain/status.ts can reference them and no component ever
+   hardcodes a hex. */
+:root {
+  /* EN_ROUTE_TO_PICKUP + EN_ROUTE_TO_DELIVERY — moving */
+  --status-en-route: #D97706;
+  /* AT_PICKUP + AT_DELIVERY — arrived, waiting on the customer */
+  --status-arrived: #0891B2;
+  /* PICKED_UP — goods are on board, distinct from both */
+  --status-collected: #7C3AED;
+}

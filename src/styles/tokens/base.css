@@ -1,0 +1,35 @@
+/* ============================================================
+   INNOVO XPRESS — base resets + type utility classes.
+   Light, operations-first. Body sits directly on white canvas.
+   ============================================================ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: var(--type-body-md-size);
+  line-height: var(--type-body-md-lh);
+  color: var(--color-body);
+  background: var(--color-background);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* --- Type utility classes (mirror the type tokens) --- */
+.t-page-title  { font: var(--fw-semibold) var(--type-page-title-size)/var(--type-page-title-lh) var(--font-sans); font-family: var(--font-display); color: var(--color-foreground); letter-spacing: 0; }
+.t-modal-title { font: var(--fw-semibold) var(--type-modal-title-size)/var(--type-modal-title-lh) var(--font-sans); font-family: var(--font-display); color: var(--color-foreground); }
+.t-section     { font: var(--fw-semibold) var(--type-section-title-size)/var(--type-section-title-lh) var(--font-sans); font-family: var(--font-display); color: var(--color-foreground); }
+.t-table-head  { font: var(--fw-semibold) var(--type-table-header-size)/var(--type-table-header-lh) var(--font-sans); font-family: var(--font-mono); color: var(--color-foreground); letter-spacing: var(--type-table-header-tracking); }
+.t-nav         { font: var(--fw-medium) var(--type-nav-label-size)/var(--type-nav-label-lh) var(--font-sans); }
+.t-tab         { font: var(--fw-medium) var(--type-tab-label-size)/var(--type-tab-label-lh) var(--font-sans); }
+.t-body        { font: var(--fw-regular) var(--type-body-md-size)/var(--type-body-md-lh) var(--font-sans); color: var(--color-body); }
+.t-body-sm     { font: var(--fw-regular) var(--type-body-sm-size)/var(--type-body-sm-lh) var(--font-sans); color: var(--color-body); }
+.t-form-label  { font: var(--fw-semibold) var(--type-form-label-size)/var(--type-form-label-lh) var(--font-sans); color: var(--color-foreground); }
+.t-input       { font: var(--fw-regular) var(--type-input-size)/var(--type-input-lh) var(--font-sans); }
+.t-button      { font: var(--fw-medium) var(--type-button-size)/var(--type-button-lh) var(--font-sans); }
+.t-badge       { font: var(--fw-semibold) var(--type-badge-size)/var(--type-badge-lh) var(--font-sans); font-family: var(--font-mono); letter-spacing: var(--type-badge-tracking); }
+.t-caption     { font: var(--fw-regular) var(--type-caption-size)/var(--type-caption-lh) var(--font-sans); color: var(--color-muted); }
+
+/* Tabular numerals for tables/figures */
+.tnum { font-family: var(--font-mono); font-feature-settings: var(--numeric-tabular); font-variant-numeric: tabular-nums; }

@@ -1,0 +1,58 @@
+import type { Task } from '@/domain/types';
+
+let n = 0;
+
+/** Minimal Task factory for tests. */
+export function makeTask(partial: Partial<Task> = {}): Task {
+  n += 1;
+  return {
+    id: partial.id ?? `T${n}`,
+    orderNo: `ORD-${n}`,
+    externalId: '',
+    type: 'Delivery',
+    priority: 'Normal',
+    status: 'UNASSIGNED',
+    driver: '',
+    driverId: '',
+    driverAssigned: false,
+    merchant: 'Mini Mart',
+    description: '',
+    dest: '',
+    destBuilding: '',
+    destArea: '',
+    destCity: '',
+    destPostcode: '',
+    destNotes: '',
+    recipient: '',
+    recipientPhone: '',
+    recipientEmail: '',
+    destLat: null,
+    destLng: null,
+    requester: '',
+    requesterPhone: '',
+    requesterEmail: '',
+    dispatchAddress: '',
+    dispatchBuilding: '',
+    dispatchArea: '',
+    dispatchCity: '',
+    dispatchPostcode: '',
+    dispatchNotes: '',
+    dispatchLat: null,
+    dispatchLng: null,
+    completeAfter: '',
+    completeBefore: '',
+    completeAfterFull: '',
+    completeBeforeFull: '',
+    createdTime: '',
+    feeNum: 0,
+    codNum: 0,
+    items: [],
+    attachments: 0,
+    requirements: [],
+    team: 'Default Team',
+    history: [],
+    isNew: false,
+    notification: true,
+    ...partial,
+  };
+}

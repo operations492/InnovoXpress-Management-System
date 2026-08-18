@@ -1,0 +1,60 @@
+:root {
+  /* ============================================================
+     INNOVO XPRESS — COLOR TOKENS · "Iris" identity
+     Light-only, operations-first: lavender-grey surfaces + a single
+     indigo (iris) accent on ink. Components reference the semantic
+     --color-* tokens below — never a raw hex, never a primitive.
+     ============================================================ */
+
+  /* --- Primitives feeding the Tailwind @theme (src/index.css) --- */
+  --white: #FFFFFF;
+  --body:  #45455C;   /* → Tailwind --color-body */
+  --muted: #7A7A93;   /* → Tailwind --color-muted */
+
+  /* --- Iris (indigo) brand ramp --- */
+  --iris-50:  #ECEBFB;   /* soft tint: selected rows, active chips, header strips */
+  --iris-100: #DEDCF7;   /* soft primary border / disabled primary */
+  --iris-600: #4B3FCF;   /* primary brand / action */
+  --iris-700: #3D33B0;   /* hover */
+  --iris-800: #332A94;   /* active / press */
+
+  /* --- Secondary status hue (route/drop · transit indicator) --- */
+  --cyan-600: #0891B2;
+
+  /* ============================================================
+     SEMANTIC TOKENS — the layer components use
+     ============================================================ */
+  /* primary / brand */
+  --color-primary:          #4B3FCF;
+  --color-primary-hover:    #3D33B0;
+  --color-primary-active:   #332A94;
+  --color-primary-disabled: #C9C5EC;
+  --color-primary-soft:     #ECEBFB;
+  --color-on-primary:       #FFFFFF;
+
+  /* surfaces (white cards sit on the lavender-grey canvas) */
+  --color-background:    #EFEFF5;  /* app canvas */
+  --color-surface-soft:  #F5F5FB;  /* input fill, hover fills, soft panels */
+  --color-border-subtle: #EEEEF6;  /* subtle dividers / muted fills */
+
+  /* text */
+  --color-foreground:  #1A1A2E;  /* headings / strongest ink */
+  --color-body:        #45455C;  /* default body text */
+  --color-muted:       #7A7A93;  /* secondary / muted text */
+  --color-placeholder: #ADADC2;  /* placeholder / disabled / faint */
+
+  /* borders */
+  --color-border:         #E6E6F0;  /* hairline borders & dividers */
+  --color-border-control: #D8D8E6;  /* input / button borders */
+  --color-ring:           #4B3FCF;  /* focus border/ring */
+
+  /* status (consignment lifecycle accents) */
+  --status-info:    #4B3FCF;  /* RECEIVED / PICKUP_RECEIVED — "New" */
+  --status-success: #16A34A;  /* DELIVERED — "Completed" */
+  --status-warning: #D97706;  /* in-flight: GOING_FOR_PICKUP / PICKED_UP / GOING_TO_DELIVERY */
+  --status-danger:  #DC2626;  /* CANCELLED — "Failed" */
+  --status-neutral: #7A7A93;  /* unallocated / unknown */
+
+  /* scrim */
+  --scrim: rgba(26, 26, 46, 0.42);  /* modal / drawer backdrop */
+}
