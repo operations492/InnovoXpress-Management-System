@@ -620,6 +620,89 @@ A tab inside the task modal. One card per leg, each with two image tiles. **Sign
 checkerboard** — they are dark-on-transparent PNGs and vanish on white. File size sits beside each
 image in mono, so a broken upload is visible at a glance.
 
+---
+
+## 19. Surfaces added after §18
+
+Same rule as above: no new primitives, no new hexes. Everything below is the existing token layer
+arranged differently.
+
+### Chat (`/chat`)
+
+Two panes: a conversation list, and a message thread. Both flat (`e0`) with a hairline between them —
+the whole screen is one working context, so nothing is lifted.
+
+- **A selected conversation** uses `--color-primary-soft`, the same fill as a selected table row. Same
+  idea, so the same treatment.
+- **Message bubbles** are the one place a fill carries meaning without a label: yours is
+  `--color-primary` with `--color-on-primary` text, theirs is `--color-surface-soft` with body text.
+  Alignment does the rest, so it survives greyscale.
+- **Unread** is a small indigo dot plus a mono count — never a bold row alone.
+- **Attachments** are a bordered tile with a file-type glyph, name, and size in **mono**, the same
+  construction as the POD tiles and for the same reason: a broken upload should be visible without
+  opening anything.
+
+### Dispatch map (`/map`)
+
+Full-bleed map with a fixed-width right sidebar. The one screen where the data surface is the map rather
+than a table, so the chrome floats on top of it.
+
+- **Floating panels** — legend, notices, the selection bar — are `--color-surface` at 90–95% opacity with
+  a backdrop blur, `radius-xl`, `e1`. Lifted things over a busy background take the lifted treatment; a
+  hairline alone disappears over tiles.
+- **Pins are `divIcon`s built from tokens**, as §18 requires. Colour is either the lifecycle hue (§3) or
+  the driver's palette entry, **never both at once** — the legend switches wholesale, so an operator is
+  never reading two colour systems on one screen.
+- **The driver palette is an 8-entry index, not hexes in the database.** A driver stores `mapColorIndex`;
+  the values live in `domain/serviceZone.ts`. That is what keeps a retheme or a colour-blind-safe pass a
+  token edit rather than a data migration.
+- **Coincident pins** (several orders at one address) render as one pin with a mono count badge.
+- **The sidebar is the accessible interface to the map**: the same rows, keyboard-navigable, each with a
+  3px left border in its pin's colour so a row and its pin are obviously the same thing.
+
+### Lasso selection
+
+Shift-drag draws a **transparent rectangle with a 2px `--color-danger` border** and a 10% danger fill.
+Red, deliberately, and the one exception to "red means destructive": a selection box is transient,
+disappears on release, and must read instantly over any map tile. An indigo box would compete with the
+pins it is selecting.
+
+Once something is caught, a **selection bar** appears bottom-centre using the floating-panel treatment,
+holding a mono count and three buttons. It follows §11's one-primary rule by having *no* primary at all —
+Assign, Create route and Unselect are utility/ghost, because none of them commits anything. The commit
+happens inside the dialog each one opens.
+
+### Assign picker — the side-by-side
+
+For a single order the dialog widens to ~960px and splits: the ranked driver list left, a map of those
+same drivers right.
+
+- **The map is a pane inside the dialog, not a second dialog.** Leaflet's panes sit at z-index 200–700 and
+  beat Radix's 50, so a modal opened over a map lands *behind* it. Nesting is not a styling preference
+  here; it is the only arrangement that works.
+- **Rank badges** are a small `--color-success` circle on the avatar, numbered in mono. The badge and the
+  map marker carry the same number — that is what ties the two panes together.
+- **Off-shift drivers stay in the list**, at 55% opacity, `cursor: not-allowed`, labelled "Off shift". A
+  list that silently shrinks from eight names to three reads as broken.
+- **Drive time is the emphasis**, distance the sub-line: `13px/600` over `11px` muted, both tabular.
+
+### Route planning
+
+- **The route line is drawn twice** — an 8px white casing under a 4px `--color-primary` stroke. A single
+  thin line vanishes over a busy city map. It sits *under* the markers: the line is context, the numbers
+  are the subject.
+- **Numbered stops** are `--color-primary` circles with mono figures. A stop that has drifted from its
+  plan turns `--status-warning`, matching the flagged row in the sidebar so the two cannot disagree.
+- **The depot keeps the teardrop place-pin** from §18 (`S`, and `E` for an end point). Places are
+  teardrops, drivers and stops are circles — never confusable at a glance.
+- **The route panel** lists stops with a numbered rib, drag-to-reorder, and ▲▼ buttons that appear on
+  hover or focus. Two ways on purpose: dragging is what a mouse reaches for, the buttons are what a
+  keyboard and a long scrolling list need.
+- **A re-optimise proposal** is a `--color-surface-soft` panel stating what it would save, with Apply and
+  "Keep mine". It never applies itself — the numbers are an argument, not an action.
+- **Stop issues** ("Address changed since planning", "Moved to another driver") are `--status-warning`
+  text on the row plus a warning strip above the list. A flag, never a silent correction.
+
 > **File structure is not documented here any more.** It rotted, which is what a file tree does inside a
 > design doc. The frontend layout lives in `frontend/innovo-frontend/CLAUDE.md`, the backend in
 > `backend/README.md`. This file owns the visual identity and nothing else.
