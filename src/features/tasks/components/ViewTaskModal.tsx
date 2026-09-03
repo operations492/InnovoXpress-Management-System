@@ -137,8 +137,8 @@ export function ViewTaskModal({ open, task, onClose, onEdit, onTrack }: ViewTask
         <div className="flex flex-col gap-4">
           <Card title="Time Window">
             <DetailRow label="Task Created">{dash(task.createdTime)}</DetailRow>
-            <DetailRow label="Complete After">{dash(task.completeAfter)}</DetailRow>
-            <DetailRow label="Complete Before">{dash(task.completeBefore)}</DetailRow>
+            <DetailRow label="Complete After">{dash(task.pickupAfter)}</DetailRow>
+            <DetailRow label="Complete Before">{dash(task.deliverBefore)}</DetailRow>
           </Card>
 
           <Card title="Linked Tasks">

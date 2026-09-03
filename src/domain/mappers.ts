@@ -4,10 +4,10 @@
  *
  * Three rules here are load-bearing and easy to get wrong:
  *
- * 1. `completeBeforeFull` MUST be "YYYY-MM-DD h:mm AM/PM". `derive.matchDate`
- *    anchors a ^YYYY-MM-DD check for the date filter and runs a `h:mm AM/PM`
- *    regex for the time-of-day slider. A raw ISO string passes the first and
- *    silently disables the second.
+ * 1. The four `*Full` window stamps MUST be "YYYY-MM-DD h:mm AM/PM".
+ *    `derive.matchDate` anchors a ^YYYY-MM-DD check for the date filter and runs
+ *    a `h:mm AM/PM` regex for the time-of-day slider. A raw ISO string passes the
+ *    first and silently disables the second.
  * 2. Money fields must be 0, never undefined — `derive.totals` sums them and
  *    `NaN` is rendered by format.money as a confident "$0.00".
  * 3. `items`, `requirements` and `history` must be arrays, never undefined —
@@ -72,8 +72,11 @@ const PACKAGE_TO_WIRE: Record<string, string> = {
   other: 'OTHER',
 };
 
-const taskTypeToUi = (v: string): TaskType => (v === 'PICKUP' ? 'Pickup' : 'Delivery');
-const taskTypeToWire = (v: TaskType) => (v === 'Pickup' ? 'PICKUP' : 'DELIVERY');
+const taskTypeToUi = (v: string): TaskType =>
+  v === 'PICKUP' ? 'Pickup' : v === 'PICKUP_AND_DELIVERY' ? 'Pickup & Delivery' : 'Delivery';
+
+const taskTypeToWire = (v: TaskType) =>
+  v === 'Pickup' ? 'PICKUP' : v === 'Pickup & Delivery' ? 'PICKUP_AND_DELIVERY' : 'DELIVERY';
 
 const priorityToUi = (v: string): TaskPriority =>
   v === 'HIGH' ? 'High' : v === 'LOW' ? 'Low' : 'Normal';
@@ -160,17 +163,19 @@ export interface SummaryRow {
   senderName: string;
   senderLine1: string;
   senderCity: string;
-  senderArea: string | null;
+  senderProvince: string | null;
   senderLat: number | null;
   senderLng: number | null;
   receiverName: string;
   receiverLine1: string;
   receiverCity: string;
-  receiverArea: string | null;
+  receiverProvince: string | null;
   receiverLat: number | null;
   receiverLng: number | null;
-  readyBy: string | null;
-  deliverBy: string | null;
+  pickupAfter: string;
+  pickupBefore: string;
+  deliverAfter: string;
+  deliverBefore: string;
   generalNote: string | null;
   createdAt: string;
   itemCount: number;
@@ -190,16 +195,18 @@ function baseTask(src: {
   priority: string;
   taskType: string;
   generalNote: string | null;
-  readyBy: string | null;
-  deliverBy: string | null;
+  pickupAfter: string;
+  pickupBefore: string;
+  deliverAfter: string;
+  deliverBefore: string;
   createdAt: string;
 }): Omit<
   Task,
-  | 'dest' | 'destBuilding' | 'destArea' | 'destCity' | 'destPostcode' | 'destNotes'
+  | 'dest' | 'destBuilding' | 'destProvince' | 'destCity' | 'destPostcode' | 'destNotes'
   | 'destLat' | 'destLng'
   | 'recipient' | 'recipientPhone' | 'recipientEmail'
   | 'requester' | 'requesterPhone' | 'requesterEmail'
-  | 'dispatchAddress' | 'dispatchBuilding' | 'dispatchArea' | 'dispatchCity'
+  | 'dispatchAddress' | 'dispatchBuilding' | 'dispatchProvince' | 'dispatchCity'
   | 'dispatchPostcode' | 'dispatchNotes'
   | 'dispatchLat' | 'dispatchLng'
   | 'items' | 'history'
@@ -218,10 +225,14 @@ function baseTask(src: {
     driverAssigned: !!src.driverName,
     merchant: src.clientName,
     description: src.generalNote ?? '',
-    completeAfter: shortStamp(src.readyBy),
-    completeBefore: shortStamp(src.deliverBy),
-    completeAfterFull: fullStamp(src.readyBy),
-    completeBeforeFull: fullStamp(src.deliverBy),
+    pickupAfter: shortStamp(src.pickupAfter),
+    pickupBefore: shortStamp(src.pickupBefore),
+    deliverAfter: shortStamp(src.deliverAfter),
+    deliverBefore: shortStamp(src.deliverBefore),
+    pickupAfterFull: fullStamp(src.pickupAfter),
+    pickupBeforeFull: fullStamp(src.pickupBefore),
+    deliverAfterFull: fullStamp(src.deliverAfter),
+    deliverBeforeFull: fullStamp(src.deliverBefore),
     createdTime: shortStamp(src.createdAt),
     // No money anywhere in this schema. Zero, never undefined.
     feeNum: 0,
@@ -249,13 +260,15 @@ export function summaryToTask(row: SummaryRow): Task {
       priority: row.priority,
       taskType: row.taskType,
       generalNote: row.generalNote,
-      readyBy: row.readyBy,
-      deliverBy: row.deliverBy,
+      pickupAfter: row.pickupAfter,
+      pickupBefore: row.pickupBefore,
+      deliverAfter: row.deliverAfter,
+      deliverBefore: row.deliverBefore,
       createdAt: row.createdAt,
     }),
     dest: row.receiverLine1,
     destBuilding: '',
-    destArea: row.receiverArea ?? '',
+    destProvince: row.receiverProvince ?? '',
     destCity: row.receiverCity,
     destPostcode: '',
     destNotes: '',
@@ -269,7 +282,7 @@ export function summaryToTask(row: SummaryRow): Task {
     requesterEmail: '',
     dispatchAddress: row.senderLine1,
     dispatchBuilding: '',
-    dispatchArea: row.senderArea ?? '',
+    dispatchProvince: row.senderProvince ?? '',
     dispatchCity: row.senderCity,
     dispatchPostcode: '',
     dispatchNotes: '',
@@ -294,13 +307,15 @@ export function detailToTask(dto: ConsignmentDto): Task {
       priority: dto.priority,
       taskType: dto.taskType,
       generalNote: dto.generalNote,
-      readyBy: dto.readyBy,
-      deliverBy: dto.deliverBy,
+      pickupAfter: dto.pickupAfter,
+      pickupBefore: dto.pickupBefore,
+      deliverAfter: dto.deliverAfter,
+      deliverBefore: dto.deliverBefore,
       createdAt: dto.createdAt,
     }),
     dest: dto.receiver.line1,
     destBuilding: '',
-    destArea: dto.receiver.area ?? '',
+    destProvince: dto.receiver.province ?? '',
     destCity: dto.receiver.city,
     destPostcode: dto.receiver.postcode ?? '',
     destNotes: dto.receiver.notes ?? '',
@@ -314,7 +329,7 @@ export function detailToTask(dto: ConsignmentDto): Task {
     requesterEmail: dto.sender.email ?? '',
     dispatchAddress: dto.sender.line1,
     dispatchBuilding: '',
-    dispatchArea: dto.sender.area ?? '',
+    dispatchProvince: dto.sender.province ?? '',
     dispatchCity: dto.sender.city,
     dispatchPostcode: dto.sender.postcode ?? '',
     dispatchNotes: dto.sender.instructions ?? '',
@@ -349,7 +364,7 @@ export function toConsignmentPayload(
       ...(values.requesterPhone.trim() ? { phone: values.requesterPhone.trim() } : {}),
       ...(values.requesterEmail.trim() ? { email: values.requesterEmail.trim() } : {}),
       line1: values.dispatchAddress.trim(),
-      ...(values.dispatchArea.trim() ? { area: values.dispatchArea.trim() } : {}),
+      ...(values.dispatchProvince.trim() ? { province: values.dispatchProvince.trim() } : {}),
       city: values.dispatchCity.trim(),
       ...(values.dispatchPostcode.trim() ? { postcode: values.dispatchPostcode.trim() } : {}),
       ...(values.dispatchNotes.trim() ? { instructions: values.dispatchNotes.trim() } : {}),
@@ -363,7 +378,7 @@ export function toConsignmentPayload(
       ...(values.recipientPhone.trim() ? { phone: values.recipientPhone.trim() } : {}),
       ...(values.recipientEmail.trim() ? { email: values.recipientEmail.trim() } : {}),
       line1: values.dest.trim(),
-      ...(values.destArea.trim() ? { area: values.destArea.trim() } : {}),
+      ...(values.destProvince.trim() ? { province: values.destProvince.trim() } : {}),
       city: values.destCity.trim(),
       ...(values.destPostcode.trim() ? { postcode: values.destPostcode.trim() } : {}),
       ...(values.destNotes.trim() ? { notes: values.destNotes.trim() } : {}),
@@ -381,10 +396,16 @@ export function toConsignmentPayload(
   if (values.externalId.trim()) payload.clientReference = values.externalId.trim();
   if (values.description.trim()) payload.generalNote = values.description.trim();
 
-  const readyBy = toIsoOrUndefined(values.completeAfter);
-  const deliverBy = toIsoOrUndefined(values.completeBefore);
-  if (readyBy) payload.readyBy = readyBy;
-  if (deliverBy) payload.deliverBy = deliverBy;
+  const pickupAfter = toIsoOrUndefined(values.pickupAfter);
+  const pickupBefore = toIsoOrUndefined(values.pickupBefore);
+  const deliverAfter = toIsoOrUndefined(values.deliverAfter);
+  const deliverBefore = toIsoOrUndefined(values.deliverBefore);
+  // All four are mandatory server-side, so they are sent unconditionally. The
+  // guard is only against an unparseable stamp, which the picker cannot produce.
+  if (pickupAfter) payload.pickupAfter = pickupAfter;
+  if (pickupBefore) payload.pickupBefore = pickupBefore;
+  if (deliverAfter) payload.deliverAfter = deliverAfter;
+  if (deliverBefore) payload.deliverBefore = deliverBefore;
 
   // clientId is set on create only — the API refuses to move an order between
   // clients, and sending an unknown key is a 400 (the schemas are strict).

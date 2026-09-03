@@ -11,6 +11,8 @@ interface ActiveTasksFilterMenuProps {
   onType: (v: string[]) => void;
   onDriver: (v: string[]) => void;
   onClear: () => void;
+  /** See DateFilterMenu — `left` for the map, `right` for the tasks toolbar. */
+  align?: 'left' | 'right';
 }
 
 function toggle(arr: string[], value: string): string[] {
@@ -29,6 +31,7 @@ export function ActiveTasksFilterMenu({
   onType,
   onDriver,
   onClear,
+  align = 'right',
 }: ActiveTasksFilterMenuProps) {
   const [open, setOpen] = useState(false);
   const drivers = useDrivers();
@@ -38,7 +41,7 @@ export function ActiveTasksFilterMenu({
     <Popover
       open={open}
       onClose={() => setOpen(false)}
-      align="right"
+      align={align}
       width={560}
       trigger={
         <Button

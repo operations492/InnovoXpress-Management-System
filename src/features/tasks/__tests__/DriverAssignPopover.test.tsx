@@ -109,9 +109,9 @@ const META = {
   pickup: {
     lat: 31.4183,
     lng: 74.1725,
-    line1: 'Warehouse 4, Sundar Industrial Estate',
-    area: 'Raiwind Road',
-    city: 'Lahore',
+    line1: '6750 Century Avenue, Unit 3',
+    province: 'ON',
+    city: 'Mississauga',
   },
   source: 'osrm' as const,
   warning: null,
@@ -291,7 +291,7 @@ describe('ranked mode', () => {
 
   it('says which pickup the ranking is measured against', async () => {
     open();
-    expect(await screen.findByText(/ranked by drive time to Raiwind Road/i)).toBeInTheDocument();
+    expect(await screen.findByText(/ranked by drive time to Mississauga/i)).toBeInTheDocument();
   });
 });
 

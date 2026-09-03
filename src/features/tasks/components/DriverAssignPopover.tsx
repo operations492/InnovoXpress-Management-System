@@ -208,7 +208,7 @@ export function DriverAssignPopover({
         </span>
         {nearest.meta && (
           <span className="text-[12px]">
-            · ranked by drive time to {nearest.meta.pickup.area ?? nearest.meta.pickup.city}
+            · ranked by drive time to {nearest.meta.pickup.city}
           </span>
         )}
       </div>

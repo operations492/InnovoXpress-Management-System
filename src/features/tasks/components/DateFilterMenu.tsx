@@ -33,6 +33,15 @@ interface DateFilterMenuProps {
   onPreset: (key: string) => void;
   onPickDate: (iso: string) => void;
   onTime: (from: number, to: number) => void;
+  /**
+   * Which edge of the trigger the panel hangs from. Defaults to `right`, which
+   * is correct in the consignments toolbar where these sit on the right-hand
+   * side and the panel opens leftwards into the page.
+   *
+   * The map needs `left`: the same menu sits in the top-LEFT corner there, and a
+   * 440px panel opening leftwards from x=12 is simply off-screen.
+   */
+  align?: 'left' | 'right';
 }
 
 export function DateFilterMenu({
@@ -44,6 +53,7 @@ export function DateFilterMenu({
   onPreset,
   onPickDate,
   onTime,
+  align = 'right',
 }: DateFilterMenuProps) {
   const [open, setOpen] = useState(false);
   const [monthDate, setMonthDate] = useState<Date>(() => parseISO(dateFrom) ?? new Date());
@@ -77,7 +87,7 @@ export function DateFilterMenu({
       <Popover
         open={open}
         onClose={() => setOpen(false)}
-        align="right"
+        align={align}
         width={440}
         trigger={
           <Button

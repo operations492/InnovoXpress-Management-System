@@ -153,7 +153,7 @@ export interface PartyDto {
   phone: string | null;
   email: string | null;
   line1: string;
-  area: string | null;
+  province: string | null;
   city: string;
   postcode: string | null;
   instructions?: string | null;
@@ -261,8 +261,10 @@ export interface ConsignmentDto {
   taskType: string;
   sender: PartyDto;
   receiver: PartyDto;
-  readyBy: string | null;
-  deliverBy: string | null;
+  pickupAfter: string;
+  pickupBefore: string;
+  deliverAfter: string;
+  deliverBefore: string;
   assignedAt: string | null;
   pickedUpAt: string | null;
   deliveredAt: string | null;
@@ -402,11 +404,13 @@ export interface MapPinDto {
   receiverLng: number | null;
   receiverName: string;
   receiverLine1: string;
-  receiverArea: string | null;
+  receiverProvince: string | null;
   receiverCity: string;
   totalQty: number;
-  readyBy: string | null;
-  deliverBy: string | null;
+  pickupAfter: string;
+  pickupBefore: string;
+  deliverAfter: string;
+  deliverBefore: string;
   driver: { id: string; name: string; colorIndex: number } | null;
 }
 
@@ -471,7 +475,7 @@ export interface NearestDriversResponse {
   meta: {
     consignmentId: string;
     orderNo: string;
-    pickup: { lat: number; lng: number; line1: string; area: string | null; city: string };
+    pickup: { lat: number; lng: number; line1: string; province: string | null; city: string };
     /** What the numbers mean. `straight-line` = the routing engine was unreachable. */
     source: 'osrm' | 'straight-line' | 'none';
     warning: string | null;
@@ -500,7 +504,7 @@ export interface DriverRouteDto {
   reason: 'no-position' | 'no-road-route' | 'engine-unavailable' | null;
   warning: string | null;
   driver: { id: string; name: string; onShift: boolean; active: boolean };
-  pickup: { lat: number; lng: number; line1: string; area: string | null; city: string };
+  pickup: { lat: number; lng: number; line1: string; province: string | null; city: string };
   orderNo: string;
   /** Where the line starts — the driver's last known position. */
   from: { lat: number; lng: number; recordedAt: string } | null;
@@ -525,10 +529,12 @@ export interface RouteStopDto {
   priority: string;
   receiverName: string;
   receiverLine1: string;
-  receiverArea: string | null;
+  receiverProvince: string | null;
   receiverCity: string;
-  readyBy: string | null;
-  deliverBy: string | null;
+  pickupAfter: string;
+  pickupBefore: string;
+  deliverAfter: string;
+  deliverBefore: string;
   /** Where the PLAN put this stop — not necessarily where the order says today. */
   lat: number;
   lng: number;

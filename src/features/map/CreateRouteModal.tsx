@@ -16,7 +16,7 @@ import { AddressField, type AddressValue } from '@/features/tasks/components/Add
  * operator carries on selecting, and the plan is read later from the DRIVERS tab.
  */
 
-const EMPTY: AddressValue = { line1: '', area: '', city: '', postcode: '', lat: null, lng: null };
+const EMPTY: AddressValue = { line1: '', province: '', city: '', postcode: '', lat: null, lng: null };
 
 const pinned = (a: AddressValue) => a.lat !== null && a.lng !== null;
 
@@ -73,7 +73,7 @@ export function CreateRouteModal({
   const canSave = pinned(start) && !!driverId && routable >= 2 && !pending;
 
   const labelOf = (a: AddressValue) =>
-    [a.line1, a.area, a.city].filter(Boolean).join(', ') || undefined;
+    [a.line1, a.province, a.city].filter(Boolean).join(', ') || undefined;
 
   return (
     <Modal

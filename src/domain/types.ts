@@ -7,7 +7,13 @@
  */
 import type { TaskStatus } from './status';
 
-export type TaskType = 'Delivery' | 'Pickup';
+/**
+ * `Pickup & Delivery` is the only type the form now offers — every job in this
+ * system is a collection followed by a drop, which the eight-state lifecycle
+ * spells out. The other two remain in the union because rows created before the
+ * change still carry them and must still render.
+ */
+export type TaskType = 'Delivery' | 'Pickup' | 'Pickup & Delivery';
 export type TaskPriority = 'Normal' | 'High' | 'Low';
 
 export interface TaskItem {
@@ -63,7 +69,7 @@ export interface Task {
   dest: string;
   destBuilding: string;
   /** Structured drop address — the API stores area/city/postcode separately. */
-  destArea: string;
+  destProvince: string;
   destCity: string;
   destPostcode: string;
   destNotes: string;
@@ -84,16 +90,25 @@ export interface Task {
   dispatchAddress: string;
   dispatchBuilding: string;
   /** Structured pickup address — the API stores area/city/postcode separately. */
-  dispatchArea: string;
+  dispatchProvince: string;
   dispatchCity: string;
   dispatchPostcode: string;
   dispatchNotes: string;
 
   // Time window.
-  completeAfter: string; // short display, e.g. "Jun 26 11:15 AM"
-  completeBefore: string;
-  completeAfterFull: string; // "2026-06-26 11:15 AM"
-  completeBeforeFull: string;
+  /*
+   * Four scheduling windows, all mandatory — the columns behind them are
+   * NOT NULL. `*Full` is "2026-06-26 11:15 AM"; the bare field is the short
+   * display, e.g. "Jun 26 11:15 AM".
+   */
+  pickupAfter: string;
+  pickupBefore: string;
+  deliverAfter: string;
+  deliverBefore: string;
+  pickupAfterFull: string;
+  pickupBeforeFull: string;
+  deliverAfterFull: string;
+  deliverBeforeFull: string;
   createdTime: string;
 
   // Money (prototype pricing; no backend column yet — see README).

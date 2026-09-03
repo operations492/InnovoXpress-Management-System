@@ -135,8 +135,10 @@ export interface BulkPatch {
   merchant?: string;
   priority?: TaskPriority | '';
   description?: string;
-  completeAfter?: string;
-  completeBefore?: string;
+  pickupAfter?: string;
+  pickupBefore?: string;
+  deliverAfter?: string;
+  deliverBefore?: string;
   dueAmount?: string;
   shippingFee?: string;
   externalId?: string;
@@ -160,13 +162,21 @@ export function bulkUpdate(tasks: Task[], ids: string[], patch: BulkPatch): Task
     if (patch.merchant) next.merchant = patch.merchant;
     if (patch.priority) next.priority = patch.priority;
     if (patch.description) next.description = patch.description;
-    if (patch.completeAfter) {
-      next.completeAfter = patch.completeAfter;
-      next.completeAfterFull = patch.completeAfter;
+    if (patch.pickupAfter) {
+      next.pickupAfter = patch.pickupAfter;
+      next.pickupAfterFull = patch.pickupAfter;
     }
-    if (patch.completeBefore) {
-      next.completeBefore = patch.completeBefore;
-      next.completeBeforeFull = patch.completeBefore;
+    if (patch.pickupBefore) {
+      next.pickupBefore = patch.pickupBefore;
+      next.pickupBeforeFull = patch.pickupBefore;
+    }
+    if (patch.deliverAfter) {
+      next.deliverAfter = patch.deliverAfter;
+      next.deliverAfterFull = patch.deliverAfter;
+    }
+    if (patch.deliverBefore) {
+      next.deliverBefore = patch.deliverBefore;
+      next.deliverBeforeFull = patch.deliverBefore;
     }
     if (patch.dueAmount) next.codNum = parseMoney(patch.dueAmount);
     if (patch.shippingFee) next.feeNum = parseMoney(patch.shippingFee);
@@ -200,7 +210,7 @@ export function createTask(
     description: values.description,
     dest: values.dest,
     destBuilding: values.destBuilding,
-    destArea: values.destArea,
+    destProvince: values.destProvince,
     destCity: values.destCity,
     destPostcode: values.destPostcode,
     destNotes: values.destNotes,
@@ -214,16 +224,20 @@ export function createTask(
     requesterEmail: values.requesterEmail,
     dispatchAddress: values.dispatchAddress,
     dispatchBuilding: values.dispatchBuilding,
-    dispatchArea: values.dispatchArea,
+    dispatchProvince: values.dispatchProvince,
     dispatchCity: values.dispatchCity,
     dispatchPostcode: values.dispatchPostcode,
     dispatchNotes: values.dispatchNotes,
     dispatchLat: values.dispatchLat,
     dispatchLng: values.dispatchLng,
-    completeAfter: values.completeAfter,
-    completeBefore: values.completeBefore,
-    completeAfterFull: values.completeAfter,
-    completeBeforeFull: values.completeBefore,
+    pickupAfter: values.pickupAfter,
+    pickupBefore: values.pickupBefore,
+    deliverAfter: values.deliverAfter,
+    deliverBefore: values.deliverBefore,
+    pickupAfterFull: values.pickupAfter,
+    pickupBeforeFull: values.pickupBefore,
+    deliverAfterFull: values.deliverAfter,
+    deliverBeforeFull: values.deliverBefore,
     createdTime: opts?.time ?? nowLabel(),
     feeNum: parseMoney(values.shippingFee),
     codNum: parseMoney(values.dueAmount),
@@ -263,7 +277,7 @@ export function updateTask(
       description: values.description,
       dest: values.dest,
       destBuilding: values.destBuilding,
-      destArea: values.destArea,
+      destProvince: values.destProvince,
       destCity: values.destCity,
       destPostcode: values.destPostcode,
       destNotes: values.destNotes,
@@ -275,14 +289,16 @@ export function updateTask(
       requesterEmail: values.requesterEmail,
       dispatchAddress: values.dispatchAddress,
       dispatchBuilding: values.dispatchBuilding,
-      dispatchArea: values.dispatchArea,
+      dispatchProvince: values.dispatchProvince,
       dispatchCity: values.dispatchCity,
       dispatchPostcode: values.dispatchPostcode,
       dispatchNotes: values.dispatchNotes,
-      completeAfter: values.completeAfter,
-      completeBefore: values.completeBefore,
-      completeAfterFull: values.completeAfter,
-      completeBeforeFull: values.completeBefore,
+      pickupAfter: values.pickupAfter,
+      deliverBefore: values.deliverBefore,
+      pickupAfterFull: values.pickupAfter,
+      pickupBeforeFull: values.pickupBefore,
+      deliverAfterFull: values.deliverAfter,
+      deliverBeforeFull: values.deliverBefore,
       team: values.team,
       requirements: expandRequirements(values.requirementsLabel),
       additionalServices: values.additionalServices,
@@ -317,7 +333,7 @@ export function taskToFormValues(t: Task): TaskFormValues {
     requesterEmail: t.requesterEmail,
     dispatchAddress: t.dispatchAddress,
     dispatchBuilding: t.dispatchBuilding,
-    dispatchArea: t.dispatchArea,
+    dispatchProvince: t.dispatchProvince,
     dispatchCity: t.dispatchCity,
     dispatchPostcode: t.dispatchPostcode,
     dispatchNotes: t.dispatchNotes,
@@ -329,14 +345,18 @@ export function taskToFormValues(t: Task): TaskFormValues {
     notification: t.notification,
     dest: t.dest,
     destBuilding: t.destBuilding,
-    destArea: t.destArea,
+    destProvince: t.destProvince,
     destCity: t.destCity,
     destPostcode: t.destPostcode,
     destNotes: t.destNotes,
     destLat: t.destLat,
     destLng: t.destLng,
-    completeAfter: t.completeAfter,
-    completeBefore: t.completeBefore,
+    // The *Full stamps, not the short display — the pickers parse and re-emit
+    // "YYYY-MM-DD h:mm AM/PM", and "Jun 26 11:15 AM" has no year to parse.
+    pickupAfter: t.pickupAfterFull,
+    pickupBefore: t.pickupBeforeFull,
+    deliverAfter: t.deliverAfterFull,
+    deliverBefore: t.deliverBeforeFull,
     team: t.team || 'Team not assigned',
     driver: t.driverAssigned && t.driver ? t.driver : UNASSIGNED_DRIVER_LABEL,
     requirementsLabel: requirementsLabel(t.requirements),

@@ -63,10 +63,10 @@ describe('consignment required fields', () => {
       'Client',
       'Sender name',
       'Pickup address',
-      'Pickup city',
+      'Pickup city (open the address picker)',
       'Receiver name',
       'Drop address',
-      'Drop city',
+      'Drop city (open the address picker)',
       'Pickup map pin',
       'Drop map pin',
     ]);
@@ -79,14 +79,14 @@ describe('consignment required fields', () => {
         merchant: 'Daraz',
         requester: 'Sender A',
         dispatchAddress: 'Warehouse 4',
-        dispatchCity: 'Lahore',
-        dispatchLat: 31.2833,
-        dispatchLng: 74.1167,
+        dispatchCity: 'Mississauga',
+        dispatchLat: 43.628,
+        dispatchLng: -79.626,
         recipient: 'Receiver B',
         dest: 'House 214',
-        destCity: 'Karachi',
-        destLat: 24.8607,
-        destLng: 67.0011,
+        destCity: 'Toronto',
+        destLat: 43.6532,
+        destLng: -79.3832,
       }),
     ).toEqual([]);
   });
@@ -98,11 +98,11 @@ describe('consignment required fields', () => {
       ...EMPTY_TASK_FORM,
       merchant: 'Daraz',
       requester: 'Sender A',
-      dispatchAddress: 'Some lane with no OSM entry',
-      dispatchCity: 'Lahore',
+      dispatchAddress: 'Some lane the geocoder has never heard of',
+      dispatchCity: 'Mississauga',
       recipient: 'Receiver B',
       dest: 'Another unmapped lane',
-      destCity: 'Karachi',
+      destCity: 'Toronto',
     });
     expect(missing).toEqual(['Pickup map pin', 'Drop map pin']);
   });

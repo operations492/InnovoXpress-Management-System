@@ -29,7 +29,7 @@ const initialForm = {
   keyword: '',
   merchant: 'All',
   status: 'All',
-  completeBefore: '',
+  deliverBefore: '',
 };
 
 function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
@@ -123,7 +123,7 @@ export function SearchPanel({ tasks, onView }: SearchPanelProps) {
             <Select options={STATUS_OPTS} value={f.status} onChange={(e) => set('status', e.target.value)} />
           </Labeled>
           <Labeled label="Complete Before">
-            <Input icon={<Icon name="calendar" size={15} />} placeholder="Date range" value={f.completeBefore} onChange={(e) => set('completeBefore', e.target.value)} />
+            <Input icon={<Icon name="calendar" size={15} />} placeholder="Date range" value={f.deliverBefore} onChange={(e) => set('deliverBefore', e.target.value)} />
           </Labeled>
           <div className="flex flex-1 items-end gap-2">
             <Button variant="utility" size="md" onClick={clear}>

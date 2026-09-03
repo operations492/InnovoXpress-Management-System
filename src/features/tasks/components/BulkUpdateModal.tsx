@@ -23,8 +23,8 @@ const BLANK = {
   merchant: '',
   priority: '',
   description: '',
-  completeAfter: '',
-  completeBefore: '',
+  pickupAfter: '',
+  deliverBefore: '',
   dueAmount: '',
   shippingFee: '',
   externalId: '',
@@ -62,8 +62,8 @@ export function BulkUpdateModal({ open, count, onClose, onSave }: BulkUpdateModa
     if (f.merchant) patch.merchant = f.merchant;
     if (f.priority) patch.priority = f.priority as TaskPriority;
     if (f.description) patch.description = f.description;
-    if (f.completeAfter) patch.completeAfter = f.completeAfter;
-    if (f.completeBefore) patch.completeBefore = f.completeBefore;
+    if (f.pickupAfter) patch.pickupAfter = f.pickupAfter;
+    if (f.deliverBefore) patch.deliverBefore = f.deliverBefore;
     if (f.dueAmount) patch.dueAmount = f.dueAmount;
     if (f.shippingFee) patch.shippingFee = f.shippingFee;
     if (f.externalId) patch.externalId = f.externalId;
@@ -118,10 +118,10 @@ export function BulkUpdateModal({ open, count, onClose, onSave }: BulkUpdateModa
 
         <div className="flex gap-3">
           <Field label="Complete After">
-            <Input placeholder="2026-06-26 10:32 AM" value={f.completeAfter} onChange={(e) => set('completeAfter', e.target.value)} />
+            <Input placeholder="2026-06-26 10:32 AM" value={f.pickupAfter} onChange={(e) => set('pickupAfter', e.target.value)} />
           </Field>
           <Field label="Complete Before">
-            <Input placeholder="2026-06-27 10:31 AM" value={f.completeBefore} onChange={(e) => set('completeBefore', e.target.value)} />
+            <Input placeholder="2026-06-27 10:31 AM" value={f.deliverBefore} onChange={(e) => set('deliverBefore', e.target.value)} />
           </Field>
         </div>
 

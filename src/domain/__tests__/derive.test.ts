@@ -42,7 +42,7 @@ describe('visibleRows', () => {
 
 describe('matchDate', () => {
   const today = new Date(2026, 5, 27); // 2026-06-27
-  const on = (d: string) => makeTask({ completeBeforeFull: d });
+  const on = (d: string) => makeTask({ deliverBeforeFull: d });
   const withRange = (key: string) => {
     const { from, to } = presetRange(key, today);
     return { ...EMPTY_FILTERS, dateFrom: from, dateTo: to };

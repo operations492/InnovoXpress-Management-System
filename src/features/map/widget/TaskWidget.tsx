@@ -14,7 +14,7 @@ interface TaskWidgetProps {
   onSelectSibling: (taskId: string) => void;
 }
 
-function timeWindow(readyBy: string | null, deliverBy: string | null): string {
+function timeWindow(pickupAfter: string | null, deliverBefore: string | null): string {
   const fmt = (iso: string) =>
     new Date(iso).toLocaleString([], {
       day: '2-digit',
@@ -23,9 +23,9 @@ function timeWindow(readyBy: string | null, deliverBy: string | null): string {
       minute: '2-digit',
     });
 
-  if (readyBy && deliverBy) return `${fmt(readyBy)} – ${fmt(deliverBy)}`;
-  if (deliverBy) return `By ${fmt(deliverBy)}`;
-  if (readyBy) return `From ${fmt(readyBy)}`;
+  if (pickupAfter && deliverBefore) return `${fmt(pickupAfter)} – ${fmt(deliverBefore)}`;
+  if (deliverBefore) return `By ${fmt(deliverBefore)}`;
+  if (pickupAfter) return `From ${fmt(pickupAfter)}`;
   return 'No time window';
 }
 
@@ -83,7 +83,8 @@ export function TaskWidget({
           <Icon name="pin" size={14} />
           <span className="text-foreground">
             {pin.receiverLine1}
-            {pin.receiverArea ? `, ${pin.receiverArea}` : ''}, {pin.receiverCity}
+            , {pin.receiverCity}
+            {pin.receiverProvince ? `, ${pin.receiverProvince}` : ''}
           </span>
         </div>
         <div className="flex items-start gap-2">
@@ -92,7 +93,7 @@ export function TaskWidget({
         </div>
         <div className="flex items-start gap-2">
           <Icon name="clock" size={14} />
-          <span className="text-foreground">{timeWindow(pin.readyBy, pin.deliverBy)}</span>
+          <span className="text-foreground">{timeWindow(pin.pickupAfter, pin.deliverBefore)}</span>
         </div>
       </dl>
 

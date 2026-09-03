@@ -61,6 +61,25 @@ export interface MapViewState {
    * serialisable; at a few hundred ids the membership checks are irrelevant.
    */
   selectedTaskIds: string[];
+
+  /**
+   * The two filter menus lifted from the consignments page.
+   *
+   * Same shape as `TaskFilters` in `domain/derive.ts` on purpose — the same
+   * `DateFilterMenu` and `ActiveTasksFilterMenu` components render both screens,
+   * so the state they drive has to look identical. The *predicates* are separate
+   * (see `matchDate` / `matchChecklists` below) because those operate on `Task`
+   * and a pin is a `MapPinDto`.
+   */
+  dateFilter: string;
+  dateFrom: string | null;
+  dateTo: string | null;
+  timeFrom: number;
+  timeTo: number;
+  fStatus: string[];
+  fType: string[];
+  /** Driver NAMES, matching the table — the menu lists names, not ids. */
+  fDriver: string[];
 }
 
 export const initialMapView: MapViewState = {
@@ -71,6 +90,14 @@ export const initialMapView: MapViewState = {
   query: '',
   openTaskId: null,
   selectedTaskIds: [],
+  dateFilter: 'all',
+  dateFrom: null,
+  dateTo: null,
+  timeFrom: 0,
+  timeTo: 1439,
+  fStatus: [],
+  fType: [],
+  fDriver: [],
 };
 
 export type MapViewAction =
@@ -83,7 +110,14 @@ export type MapViewAction =
   | { type: 'OPEN_TASK'; taskId: string | null }
   | { type: 'SELECT_MANY'; taskIds: string[]; additive: boolean }
   | { type: 'TOGGLE_ONE'; taskId: string }
-  | { type: 'CLEAR_SELECTION' };
+  | { type: 'CLEAR_SELECTION' }
+  | { type: 'SET_DATE_PRESET'; key: string; from: string | null; to: string | null }
+  | { type: 'SET_CUSTOM_DATE'; iso: string }
+  | { type: 'SET_TIME'; from: number; to: number }
+  | { type: 'SET_STATUS_FILTER'; values: string[] }
+  | { type: 'SET_TYPE_FILTER'; values: string[] }
+  | { type: 'SET_DRIVER_FILTER'; values: string[] }
+  | { type: 'CLEAR_FILTERS' };
 
 export function mapViewReducer(state: MapViewState, action: MapViewAction): MapViewState {
   switch (action.type) {
@@ -154,6 +188,35 @@ export function mapViewReducer(state: MapViewState, action: MapViewAction): MapV
     case 'CLEAR_SELECTION':
       return state.selectedTaskIds.length === 0 ? state : { ...state, selectedTaskIds: [] };
 
+    case 'SET_DATE_PRESET':
+      return { ...state, dateFilter: action.key, dateFrom: action.from, dateTo: action.to };
+
+    /// A calendar pick is a single custom day, both bounds the same.
+    case 'SET_CUSTOM_DATE':
+      return { ...state, dateFilter: 'custom', dateFrom: action.iso, dateTo: action.iso };
+
+    case 'SET_TIME':
+      return { ...state, timeFrom: action.from, timeTo: action.to };
+
+    case 'SET_STATUS_FILTER':
+      return { ...state, fStatus: action.values };
+
+    case 'SET_TYPE_FILTER':
+      return { ...state, fType: action.values };
+
+    case 'SET_DRIVER_FILTER':
+      return { ...state, fDriver: action.values };
+
+    /*
+     * Clears the checklists only, NOT the date.
+     *
+     * "Clear All Filters" sits inside the Active Tasks menu, so it clears what
+     * that menu owns. Wiping the date range from a button the operator cannot
+     * see the effect of would be a surprise; the date menu has its own reset.
+     */
+    case 'CLEAR_FILTERS':
+      return { ...state, fStatus: [], fType: [], fDriver: [] };
+
     default:
       return state;
   }
@@ -201,10 +264,66 @@ function matchesQuery(pin: MapPinDto, needle: string): boolean {
     pin.receiverName.toLowerCase().includes(q) ||
     pin.receiverLine1.toLowerCase().includes(q) ||
     pin.receiverCity.toLowerCase().includes(q) ||
-    (pin.receiverArea?.toLowerCase().includes(q) ?? false) ||
+    // Province matches on purpose, even though every row is currently ON: typing
+    // "on" would otherwise return every order in Toronto and none in Ottawa, which
+    // reads as a broken search rather than a redundant field.
+    (pin.receiverProvince?.toLowerCase() === q) ||
     pin.orderNo.toLowerCase().includes(q) ||
     (pin.driver?.name.toLowerCase().includes(q) ?? false)
   );
+}
+
+/** Minutes past midnight, or null when the timestamp is absent or unparseable. */
+function timeOfDayMinutes(iso: string | null): number | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+function dateOnlyISO(iso: string | null): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString().slice(0, 10);
+}
+
+/**
+ * Date + time-of-day, against the delivery deadline.
+ *
+ * Mirrors `matchDate` in `domain/derive.ts`, including its most important
+ * behaviour: **an order with no `deliverBefore` is NOT excluded.** Plenty of real
+ * orders have no deadline, and silently hiding them the moment someone picks
+ * "today" would lose work rather than filter it.
+ */
+function matchDate(pin: MapPinDto, state: MapViewState): boolean {
+  if (state.timeFrom > 0 || state.timeTo < 1439) {
+    const tod = timeOfDayMinutes(pin.deliverBefore);
+    if (tod != null && (tod < state.timeFrom || tod > state.timeTo)) return false;
+  }
+  if (state.dateFrom || state.dateTo) {
+    const d = dateOnlyISO(pin.deliverBefore);
+    if (d == null) return true;
+    if (state.dateFrom && d < state.dateFrom) return false;
+    if (state.dateTo && d > state.dateTo) return false;
+  }
+  return true;
+}
+
+/**
+ * The three checklists. An empty list means "no opinion", never "match nothing".
+ *
+ * Type and driver are compared as the LABELS the menu shows — 'Delivery' and a
+ * driver's name — not the DTO's raw `DELIVERY` / driver id. That keeps one menu
+ * component driving two screens without a translation layer in the middle.
+ */
+function matchChecklists(pin: MapPinDto, state: MapViewState): boolean {
+  if (state.fStatus.length && !state.fStatus.includes(pin.status)) return false;
+  if (state.fType.length) {
+    const label = pin.taskType === 'PICKUP' ? 'Pickup' : 'Delivery';
+    if (!state.fType.includes(label)) return false;
+  }
+  if (state.fDriver.length && !state.fDriver.includes(pin.driver?.name ?? '')) return false;
+  return true;
 }
 
 /**
@@ -227,6 +346,8 @@ export function visiblePins(
   return pins.filter((pin) => {
     if (driver && pin.driver?.id !== driver) return false;
     if (!options.ignoreTaskTab && !statuses.includes(pin.status as TaskStatus)) return false;
+    if (!matchDate(pin, state)) return false;
+    if (!matchChecklists(pin, state)) return false;
     return matchesQuery(pin, state.query);
   });
 }

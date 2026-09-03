@@ -8,13 +8,20 @@
  * Edits are a DRAFT: nothing reaches the form until Save, so a half-finished
  * fiddle with the map cannot leave the consignment in a worse state than it
  * started.
+ *
+ * **Geocoding is one-way, by design: pin → text, never text → pin.** Picking a
+ * suggestion or dragging the pin fills city / province / postal code; editing
+ * those fields afterwards is free typing and costs no API call. The operator
+ * knows the address better than the geocoder does, and the coordinate is
+ * whatever they last pointed at.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MapContainer, Marker, TileLayer, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import { Button, Icon, Input, Modal } from '@/ui';
+import { Button, Icon, Input, Modal, Select } from '@/ui';
 import { cn } from '@/lib/utils';
+import { CA_PROVINCES } from '@/domain/schemas';
 import { centreFor, MIN_QUERY, reverseGeocode, searchAddresses } from '@/lib/geocode';
 import type { AddressSuggestion } from '@/lib/geocode';
 
@@ -22,7 +29,7 @@ const DEBOUNCE_MS = 300;
 
 export interface AddressValue {
   line1: string;
-  area: string;
+  province: string;
   city: string;
   postcode: string;
   lat: number | null;
@@ -43,7 +50,7 @@ export interface AddressFieldProps {
 export function AddressField({ label, tone = 'pickup', value, onSave }: AddressFieldProps) {
   const [open, setOpen] = useState(false);
   const pinned = value.lat !== null && value.lng !== null;
-  const sub = [value.area, value.city, value.postcode].filter(Boolean).join(' · ');
+  const sub = [value.city, value.province, value.postcode].filter(Boolean).join(' · ');
 
   return (
     <div className="flex min-w-0 flex-col gap-1.5">
@@ -140,9 +147,18 @@ function AddressPickerModal({
   const selfWrite = useRef(false);
   const reverseAbort = useRef<AbortController | null>(null);
 
-  // Reset the draft each time the modal opens, so Cancel truly discards.
+  /**
+   * Reset the draft each time the modal opens, so Cancel truly discards.
+   *
+   * `selfWrite` is raised here, and that is half the point of the effect.
+   * Opening the picker writes `query`, which to the search effect below looks
+   * exactly like the operator typing — so without it, merely opening an existing
+   * address would run a search and drop a suggestion list over the map before
+   * anyone touched anything. Opening a record must not change it.
+   */
   useEffect(() => {
     if (open) {
+      selfWrite.current = true;
       setDraft(value);
       setQuery(value.line1);
       setResults([]);
@@ -191,7 +207,7 @@ function AddressPickerModal({
     selfWrite.current = true;
     setDraft({
       line1: s.line1,
-      area: s.area || draft.area,
+      province: s.province || draft.province,
       city: s.city || draft.city,
       postcode: s.postcode || draft.postcode,
       lat: s.lat,
@@ -207,7 +223,7 @@ function AddressPickerModal({
    *
    * Clicking the map is the operator saying "it is here" — so the address above
    * should follow the pin, not stay stale. Reverse geocoding may return nothing
-   * (common off-network in Pakistan), in which case the pin still stands on its
+   * (open water, a new subdivision), in which case the pin still stands on its
    * own and the typed text is left alone.
    */
   const movePin = useCallback((lat: number, lng: number) => {
@@ -226,7 +242,7 @@ function AddressPickerModal({
         setDraft((d) => ({
           ...d,
           line1: found.line1 || d.line1,
-          area: found.area || d.area,
+          province: found.province || d.province,
           city: found.city || d.city,
           postcode: found.postcode || d.postcode,
           lat,
@@ -244,6 +260,27 @@ function AddressPickerModal({
 
   // Drop an in-flight reverse lookup if the modal closes under it.
   useEffect(() => () => reverseAbort.current?.abort(), []);
+
+  /**
+   * Close the suggestion list on a click outside it.
+   *
+   * `listRef` had been attached to the container since this component was
+   * written but nothing ever read it, so the only things that closed the list
+   * were picking a row or deleting back under `MIN_QUERY`. Clicking the map,
+   * the structured fields, or anywhere else left it hanging over the map.
+   *
+   * `pointerdown` rather than `click`: the list sits above the map, and Leaflet
+   * handles its own pointer events — waiting for a full click means the first
+   * tap on the map is spent dismissing the list instead of dropping the pin.
+   */
+  useEffect(() => {
+    if (results.length === 0) return;
+    const onDown = (e: PointerEvent) => {
+      if (!listRef.current?.contains(e.target as Node)) setResults([]);
+    };
+    document.addEventListener('pointerdown', onDown);
+    return () => document.removeEventListener('pointerdown', onDown);
+  }, [results.length]);
 
   /** Drop the pin where the operator is, and fill the fields from it. */
   const useMyLocation = () => {
@@ -272,6 +309,7 @@ function AddressPickerModal({
   };
 
   const pinned = draft.lat !== null && draft.lng !== null;
+  const canCommit = pinned && draft.line1.trim() !== '';
   const centre: [number, number] = pinned
     ? [draft.lat as number, draft.lng as number]
     : centreFor(draft.city);
@@ -290,7 +328,7 @@ function AddressPickerModal({
           <Button
             variant="primary"
             size="sm"
-            disabled={!pinned || !draft.line1.trim()}
+            disabled={!canCommit}
             onClick={() => onSave({ ...draft, line1: draft.line1.trim() || query.trim() })}
           >
             Save address
@@ -300,15 +338,27 @@ function AddressPickerModal({
     >
       <div className="flex flex-col gap-3">
         {/* search */}
-        <div className="relative" ref={listRef}>
+        <div className="relative z-[1000]" ref={listRef}>
           <Input
             icon={<Icon name="search" size={15} />}
-            placeholder="Search an address, e.g. DHA Phase 5 Lahore"
+            placeholder="Search an address, e.g. 5985 Explorer Drive Mississauga"
             value={query}
             autoComplete="off"
             onChange={(e) => {
               setQuery(e.target.value);
               setDraft((d) => ({ ...d, line1: e.target.value }));
+            }}
+            /*
+             * Escape closes the LIST first, and only closes the modal once the
+             * list is already shut. Letting it bubble straight to Radix would
+             * throw away a half-finished address because the operator wanted to
+             * dismiss a dropdown.
+             */
+            onKeyDown={(e) => {
+              if (e.key !== 'Escape' || results.length === 0) return;
+              e.preventDefault();
+              e.stopPropagation();
+              setResults([]);
             }}
           />
           {(busy || resolving) && (
@@ -319,7 +369,7 @@ function AddressPickerModal({
           {results.length > 0 && (
             <ul
               role="listbox"
-              className="absolute z-30 mt-1 max-h-56 w-full overflow-auto rounded-lg border border-border bg-popover shadow-lg"
+              className="absolute z-[1000] mt-1 max-h-56 w-full overflow-auto rounded-lg border border-border bg-popover shadow-lg"
             >
               {results.map((s) => (
                 <li key={s.id}>
@@ -340,19 +390,36 @@ function AddressPickerModal({
 
         {/* structured fields — auto-filled, still editable */}
         <div className="grid grid-cols-3 gap-2.5">
-          <SmallField label="Area" value={draft.area} onChange={(area) => setDraft((d) => ({ ...d, area }))} />
-          <SmallField label="City" value={draft.city} onChange={(city) => setDraft((d) => ({ ...d, city }))} />
           <SmallField
-            label="Postcode"
+            label="City"
+            value={draft.city}
+            onChange={(city) => setDraft((d) => ({ ...d, city }))}
+          />
+          <ProvinceField
+            value={draft.province}
+            onChange={(province) => setDraft((d) => ({ ...d, province }))}
+          />
+          <SmallField
+            label="Postal code"
+            placeholder="L4W 5H8"
             value={draft.postcode}
             onChange={(postcode) => setDraft((d) => ({ ...d, postcode }))}
+            /* Canonicalise on blur, not per keystroke — reformatting under the
+               caret makes the field feel broken. */
           />
         </div>
 
         {/* map */}
+        {/*
+          `isolate` is load-bearing, not decoration. Leaflet's panes sit at
+          z-index 200-700 inside this box; without a fresh stacking context they
+          are measured against the search dropdown next to them and win, so the
+          suggestions render UNDER the map. Containing them here means the
+          dropdown only has to beat its own siblings.
+        */}
         <div
           className={cn(
-            'h-[300px] w-full overflow-hidden rounded-lg border',
+            'isolate h-[300px] w-full overflow-hidden rounded-lg border',
             pinned ? 'border-border' : 'border-danger/40',
           )}
         >
@@ -413,15 +480,46 @@ function SmallField({
   label,
   value,
   onChange,
+  placeholder,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
+  placeholder?: string;
 }) {
   return (
     <label className="flex min-w-0 flex-col gap-1">
       <span className="text-[11px] font-medium text-muted-foreground">{label}</span>
-      <Input value={value} placeholder={label} onChange={(e) => onChange(e.target.value)} />
+      <Input
+        value={value}
+        placeholder={placeholder ?? label}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </label>
+  );
+}
+
+/**
+ * Province, as a Select.
+ *
+ * This is now the ONLY place a province can be set, which makes the closed set
+ * matter more, not less: free text here would put "ON", "Ont" and "Ontario" on
+ * three rows of the same city with nothing left to catch it.
+ */
+const PROVINCE_OPTIONS = [
+  { value: '', label: '—' },
+  ...CA_PROVINCES.map((p) => ({ value: p, label: p })),
+];
+
+function ProvinceField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <label className="flex min-w-0 flex-col gap-1">
+      <span className="text-[11px] font-medium text-muted-foreground">Province</span>
+      <Select
+        options={PROVINCE_OPTIONS}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
     </label>
   );
 }

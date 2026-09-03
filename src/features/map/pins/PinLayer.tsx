@@ -11,8 +11,10 @@ interface PinLayerProps {
   colourMode: ColourMode;
   colorIndexOf: (driverId: string) => number | undefined;
   openTaskId: string | null;
+  /** Ids in the multi-selection, for the pin's selected look. */
+  selectedTaskIds: string[];
   /** Must be referentially stable, or every pin re-renders. */
-  onSelect: (taskId: string) => void;
+  onSelect: (taskId: string, taskIds: string, additive: boolean) => void;
   /** The open task, so its collection leg can be drawn. */
   openPin: MapPinDto | null;
 }
@@ -29,9 +31,12 @@ function PinLayerImpl({
   colourMode,
   colorIndexOf,
   openTaskId,
+  selectedTaskIds,
   onSelect,
   openPin,
 }: PinLayerProps) {
+  // A Set, because this is checked once per pin and the selection can be large.
+  const selectedSet = new Set(selectedTaskIds);
   const leg =
     openPin &&
     openPin.senderLat !== null &&
@@ -66,7 +71,9 @@ function PinLayerImpl({
           lng={group.lng}
           colour={pinColour(group.lead, colourMode, colorIndexOf)}
           glyph={pinGlyph(group.lead.taskType)}
+          taskIds={group.pins.map((p) => p.id).join(',')}
           selected={group.pins.some((p) => p.id === openTaskId)}
+          inSelection={group.pins.some((p) => selectedSet.has(p.id))}
           count={group.pins.length}
           onSelect={onSelect}
         />

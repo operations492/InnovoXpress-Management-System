@@ -6,11 +6,11 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Button, Checkbox, Icon, Modal, Popover, StatusChip, Tabs } from '@/ui';
+import { Button, Card, Checkbox, Icon, Modal, Popover, StatusChip, Tabs } from '@/ui';
 import { cn } from '@/lib/utils';
 import { taskFormSchema } from '@/domain/schemas';
 import type { TaskFormValues } from '@/domain/schemas';
-import { EMPTY_TASK_FORM } from '@/domain/schemas';
+import { defaultWindows, EMPTY_TASK_FORM } from '@/domain/schemas';
 import { taskToFormValues } from '@/domain/mutations';
 import { itemsGrandTotal } from '@/domain/derive';
 import { money } from '@/domain/format';
@@ -53,7 +53,7 @@ function InvoiceRow({ label, value, strong }: { label: string; value: string; st
 
 export function TaskCardModal({ open, task, onClose, onSave, onChangeStatus, onDelete }: TaskCardModalProps) {
   const { flash } = useToast();
-  const form = useForm<TaskFormValues>({ resolver: zodResolver(taskFormSchema), defaultValues: EMPTY_TASK_FORM });
+  const form = useForm<TaskFormValues>({ resolver: zodResolver(taskFormSchema), defaultValues: { ...EMPTY_TASK_FORM, ...defaultWindows() } });
   const items = useItemsEditor(task?.items ?? []);
   const [tab, setTab] = useState('overview');
   const [moreOpen, setMoreOpen] = useState(false);
@@ -143,14 +143,14 @@ export function TaskCardModal({ open, task, onClose, onSave, onChangeStatus, onD
         <TaskForm
           form={form}
           itemsSlot={
-            <div className="mt-1.5 border-t pt-3">
+            <Card title="Items">
               <ItemsEditor
                 items={items.items}
                 onAdd={items.openAdd}
                 onEdit={items.openEdit}
                 onDelete={items.remove}
               />
-            </div>
+            </Card>
           }
         />
       )}

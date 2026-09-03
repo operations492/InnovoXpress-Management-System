@@ -55,7 +55,16 @@ export function pinGlyph(taskType: string): string {
 export interface PinLook {
   colour: string;
   glyph: string;
+  /** This pin's widget is open. */
   selected: boolean;
+  /**
+   * This pin is in the multi-selection (ctrl-click or lasso).
+   *
+   * A separate flag from `selected`, not a reuse of it: "the card is open" and
+   * "this is one of the twelve I am about to bulk-assign" are different states
+   * and an operator needs to tell them apart at a glance.
+   */
+  inSelection: boolean;
   /** Orders sharing this exact coordinate. >1 draws a count badge. */
   count: number;
 }
@@ -72,12 +81,22 @@ export interface PinLook {
 const cache = new Map<string, L.DivIcon>();
 
 export function pinIcon(look: PinLook): L.DivIcon {
-  const key = `${look.colour}|${look.glyph}|${look.selected}|${look.count}`;
+  const key = `${look.colour}|${look.glyph}|${look.selected}|${look.inSelection}|${look.count}`;
   const hit = cache.get(key);
   if (hit) return hit;
 
-  const size = look.selected ? 30 : 24;
-  const ring = look.selected ? '3px solid var(--color-foreground)' : '2px solid #fff';
+  const size = look.selected || look.inSelection ? 30 : 24;
+  // Open card wins the ring, because only one pin can have it. Selection uses
+  // the primary hue plus a halo, so a scattered multi-selection is readable
+  // across the whole map without hunting for thicker borders.
+  const ring = look.selected
+    ? '3px solid var(--color-foreground)'
+    : look.inSelection
+      ? '3px solid var(--color-primary)'
+      : '2px solid #fff';
+  const glow = look.inSelection && !look.selected
+    ? 'box-shadow:0 0 0 4px color-mix(in oklab, var(--color-primary) 30%, transparent),0 3px 8px rgba(26,26,46,.45);'
+    : 'box-shadow:0 3px 8px rgba(26,26,46,.45);';
   const badge =
     look.count > 1
       ? `<span style="
@@ -92,8 +111,7 @@ export function pinIcon(look: PinLook): L.DivIcon {
     html: `<div style="
       position:relative;width:${size}px;height:${size}px;
       border-radius:50% 50% 50% 0;transform:rotate(-45deg);
-      background:${look.colour};border:${ring};
-      box-shadow:0 3px 8px rgba(26,26,46,.45);
+      background:${look.colour};border:${ring};${glow}
       display:flex;align-items:center;justify-content:center;">
       <span style="transform:rotate(45deg);color:#fff;font:600 11px system-ui">${look.glyph}</span>
       ${badge}

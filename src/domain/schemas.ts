@@ -14,8 +14,57 @@
  */
 import { z } from 'zod';
 
-export const taskTypeEnum = z.enum(['Delivery', 'Pickup']);
+export const taskTypeEnum = z.enum(['Delivery', 'Pickup', 'Pickup & Delivery']);
 export const priorityEnum = z.enum(['Normal', 'High', 'Low']);
+
+/**
+ * The 13 provinces and territories, for the picker's Select.
+ *
+ * This is the option list, **not a validator**. City, province and postal code
+ * are free text by decision: the address picker fills them from the geocoder,
+ * and an operator who then edits them is assumed to know the address better
+ * than TomTom does. Nothing rejects what they type — here, in the backend Zod,
+ * or in the database.
+ */
+export const CA_PROVINCES = [
+  'AB', 'BC', 'MB', 'NB', 'NL', 'NS', 'NT', 'NU', 'ON', 'PE', 'QC', 'SK', 'YT',
+] as const;
+
+export type CaProvince = (typeof CA_PROVINCES)[number];
+
+const HOUR = 3_600_000;
+
+/**
+ * A new order opens with a plausible same-day plan rather than four blanks.
+ *
+ * The columns are NOT NULL and the pickers refuse to be cleared, so *something*
+ * has to be there from the first render. Collect from now, three hours to load,
+ * delivered within the working day — an operator adjusts what is wrong instead
+ * of filling four fields from nothing.
+ *
+ * A FUNCTION, not a constant. `EMPTY_TASK_FORM` is evaluated once when the
+ * module loads, so windows baked into it would be pinned to whenever the tab was
+ * opened — a console left running overnight would offer yesterday. Callers spread
+ * a fresh call over it when they open a form: `{ ...EMPTY_TASK_FORM, ...defaultWindows() }`.
+ */
+export function defaultWindows() {
+  const start = new Date();
+  const stamp = (ms: number) => {
+    const d = new Date(ms);
+    const minutes = d.getMinutes();
+    const meridiem = d.getHours() >= 12 ? 'PM' : 'AM';
+    const hour12 = d.getHours() % 12 || 12;
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    return `${iso} ${hour12}:${minutes < 10 ? `0${minutes}` : minutes} ${meridiem}`;
+  };
+
+  return {
+    pickupAfter: stamp(start.getTime()),
+    pickupBefore: stamp(start.getTime() + 3 * HOUR),
+    deliverAfter: stamp(start.getTime() + 3 * HOUR),
+    deliverBefore: stamp(start.getTime() + 9 * HOUR),
+  };
+}
 
 /** The shared create/edit form. */
 export const taskFormSchema = z.object({
@@ -31,7 +80,7 @@ export const taskFormSchema = z.object({
   requesterEmail: z.string(),
   dispatchAddress: z.string(),
   dispatchBuilding: z.string(),
-  dispatchArea: z.string(),
+  dispatchProvince: z.string(),
   dispatchCity: z.string(),
   dispatchPostcode: z.string(),
   dispatchNotes: z.string(),
@@ -46,15 +95,22 @@ export const taskFormSchema = z.object({
   notification: z.boolean(),
   dest: z.string(),
   destBuilding: z.string(),
-  destArea: z.string(),
+  destProvince: z.string(),
   destCity: z.string(),
   destPostcode: z.string(),
   destNotes: z.string(),
   destLat: z.number().nullable(),
   destLng: z.number().nullable(),
 
-  completeAfter: z.string(),
-  completeBefore: z.string(),
+  /*
+   * `.min(1)` and not just `z.string()`: these back NOT NULL columns, and the
+   * picker cannot be cleared, so an empty one means something upstream broke
+   * rather than an operator choosing to leave it blank.
+   */
+  pickupAfter: z.string().min(1),
+  pickupBefore: z.string().min(1),
+  deliverAfter: z.string().min(1),
+  deliverBefore: z.string().min(1),
 
   team: z.string(),
   driver: z.string(),
@@ -69,7 +125,7 @@ export const taskFormSchema = z.object({
 export type TaskFormValues = z.infer<typeof taskFormSchema>;
 
 export const EMPTY_TASK_FORM: TaskFormValues = {
-  taskType: 'Delivery',
+  taskType: 'Pickup & Delivery',
   priority: 'Normal',
   externalId: '',
   merchant: 'Client not selected',
@@ -79,7 +135,7 @@ export const EMPTY_TASK_FORM: TaskFormValues = {
   requesterEmail: '',
   dispatchAddress: '',
   dispatchBuilding: '',
-  dispatchArea: '',
+  dispatchProvince: '',
   dispatchCity: '',
   dispatchPostcode: '',
   dispatchNotes: '',
@@ -91,14 +147,13 @@ export const EMPTY_TASK_FORM: TaskFormValues = {
   notification: true,
   dest: '',
   destBuilding: '',
-  destArea: '',
+  destProvince: '',
   destCity: '',
   destPostcode: '',
   destNotes: '',
   destLat: null,
   destLng: null,
-  completeAfter: '',
-  completeBefore: '',
+  ...defaultWindows(),
   team: 'Team not assigned',
   driver: 'Driver not assigned',
   requirementsLabel: 'None',
@@ -119,14 +174,43 @@ export function missingRequired(v: TaskFormValues): string[] {
   if (!v.merchant || v.merchant === NO_CLIENT) missing.push('Client');
   if (!v.requester.trim()) missing.push('Sender name');
   if (!v.dispatchAddress.trim()) missing.push('Pickup address');
-  if (!v.dispatchCity.trim()) missing.push('Pickup city');
+  // City is set inside the address picker, never typed in the form — so name the
+  // picker, not the field. "Pickup city" sends an operator hunting for an input
+  // that does not exist.
+  if (!v.dispatchCity.trim()) missing.push('Pickup city (open the address picker)');
   if (!v.recipient.trim()) missing.push('Receiver name');
   if (!v.dest.trim()) missing.push('Drop address');
-  if (!v.destCity.trim()) missing.push('Drop city');
+  if (!v.destCity.trim()) missing.push('Drop city (open the address picker)');
   // Both ends must be pinned so the dispatcher map can show the job. Picking a
   // suggestion sets these; where nothing matches, dragging the pin does.
   if (v.dispatchLat === null || v.dispatchLng === null) missing.push('Pickup map pin');
   if (v.destLat === null || v.destLng === null) missing.push('Drop map pin');
+  /*
+   * The same three rules the database enforces, checked here so an out-of-order
+   * pair disables Save with a readable reason instead of failing as a constraint
+   * violation on the server.
+   *
+   * The pickers floor each closing window at its opening one, which stops most of
+   * this being reachable — but a floor cannot catch it in one direction: moving
+   * an OPENING window forward past a closing one leaves the pair invalid without
+   * either field having been asked for an impossible value. That is what this is
+   * for.
+   */
+  const at = (stamp: string) => new Date(stamp).getTime();
+  const ordered = (a: string, b: string) => {
+    const [x, y] = [at(a), at(b)];
+    return Number.isNaN(x) || Number.isNaN(y) || y >= x;
+  };
+
+  if (!ordered(v.pickupAfter, v.pickupBefore)) {
+    missing.push('Pickup before must not precede Pickup after');
+  }
+  if (!ordered(v.deliverAfter, v.deliverBefore)) {
+    missing.push('Deliver before must not precede Deliver after');
+  }
+  if (!ordered(v.pickupAfter, v.deliverBefore)) {
+    missing.push('Deliver before must not precede Pickup after');
+  }
   return missing;
 }
 

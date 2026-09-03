@@ -75,11 +75,11 @@ export function presetRange(
  */
 export function matchDate(task: Task, f: TaskFilters): boolean {
   if (f.timeFrom > 0 || f.timeTo < 1439) {
-    const tod = timeOfDayMinutes(task.completeBeforeFull);
+    const tod = timeOfDayMinutes(task.deliverBeforeFull);
     if (tod != null && (tod < f.timeFrom || tod > f.timeTo)) return false;
   }
   if (f.dateFrom || f.dateTo) {
-    const d = dateOnlyISO(task.completeBeforeFull);
+    const d = dateOnlyISO(task.deliverBeforeFull);
     if (d == null) return true;
     if (f.dateFrom && d < f.dateFrom) return false;
     if (f.dateTo && d > f.dateTo) return false;

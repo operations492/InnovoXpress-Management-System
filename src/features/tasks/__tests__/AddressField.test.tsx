@@ -33,12 +33,41 @@ vi.mock('leaflet', () => ({ default: { divIcon: () => ({}), latLngBounds: () => 
 
 const { AddressField } = await import('../components/AddressAutocomplete');
 
-const EMPTY = { line1: '', area: '', city: '', postcode: '', lat: null, lng: null };
+const EMPTY = { line1: '', province: '', city: '', postcode: '', lat: null, lng: null };
 
-function photonFeature(name: string, lat: number, lng: number) {
+/**
+ * A TomTom `/search` hit. Note `position` is an OBJECT here — the reverse
+ * endpoint returns it as a `"lat,lon"` STRING instead, which is the shape bug
+ * this file guards below.
+ */
+function searchResult(name: string, lat: number, lng: number) {
   return {
-    geometry: { coordinates: [lng, lat] }, // GeoJSON: [lon, lat]
-    properties: { name, district: 'Gulberg', city: 'Lahore', postcode: '54660', osm_id: 1 },
+    id: 'CA/POI/p0/1',
+    address: {
+      streetName: name,
+      municipality: 'Mississauga',
+      countrySubdivisionCode: 'ON',
+      // TomTom gives the FSA here and the full code separately — verified live.
+      postalCode: 'L4W',
+      extendedPostalCode: 'L4W 5K6',
+      freeformAddress: `${name}, Mississauga, ON`,
+    },
+    position: { lat, lon: lng },
+  };
+}
+
+/** The same place as `/reverseGeocode` returns it: position is a string. */
+function reverseAddress(name: string, lat: number, lng: number) {
+  return {
+    address: {
+      streetName: name,
+      municipality: 'Mississauga',
+      countrySubdivisionCode: 'ON',
+      postalCode: 'L4W',
+      extendedPostalCode: 'L4W 5K6',
+      freeformAddress: `${name}, Mississauga, ON`,
+    },
+    position: `${lat},${lng}`,
   };
 }
 
@@ -48,13 +77,13 @@ beforeEach(() => {
     'fetch',
     vi.fn((input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.includes('/reverse')) {
+      if (url.includes('/reverseGeocode')) {
         return Promise.resolve(
-          new Response(JSON.stringify({ features: [photonFeature('Reverse Road', 31.6, 74.4)] })),
+          new Response(JSON.stringify({ addresses: [reverseAddress('Reverse Road', 43.6, -79.7)] })),
         );
       }
       return Promise.resolve(
-        new Response(JSON.stringify({ features: [photonFeature('Gurumangat Road', 31.52, 74.35)] })),
+        new Response(JSON.stringify({ results: [searchResult('Explorer Drive', 43.628, -79.626)] })),
       );
     }),
   );
@@ -74,17 +103,17 @@ describe('address picker', () => {
 
     await user.click(screen.getByRole('button', { name: /Set address/i }));
     const box = await screen.findByPlaceholderText(/Search an address/i);
-    await user.type(box, 'Gurumangat');
+    await user.type(box, 'Explorer');
 
     await waitFor(
       () => {
         const calls = (fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls;
-        expect(calls.some((c) => String(c[0]).includes('photon.komoot.io/api'))).toBe(true);
+        expect(calls.some((c) => String(c[0]).includes('api.tomtom.com/search'))).toBe(true);
       },
       { timeout: 3000 },
     );
 
-    expect(await screen.findByText('Gurumangat Road')).toBeTruthy();
+    expect(await screen.findByText('Explorer Drive')).toBeTruthy();
   });
 
   it('applies a picked suggestion, coordinates included', async () => {
@@ -93,15 +122,22 @@ describe('address picker', () => {
     render(<AddressField label="Pickup address" value={EMPTY} onSave={onSave} />);
 
     await user.click(screen.getByRole('button', { name: /Set address/i }));
-    await user.type(await screen.findByPlaceholderText(/Search an address/i), 'Gurumangat');
-    await user.click(await screen.findByText('Gurumangat Road'));
+    await user.type(await screen.findByPlaceholderText(/Search an address/i), 'Explorer');
+    await user.click(await screen.findByText('Explorer Drive'));
 
-    // 31.52 / 74.35 — proves [lon,lat] was NOT swapped.
-    expect(await screen.findByText(/31\.52000, 74\.35000/)).toBeTruthy();
+    // 43.628 / -79.626 — proves lat and lon were NOT swapped.
+    expect(await screen.findByText(/43\.62800, -79\.62600/)).toBeTruthy();
 
     await user.click(screen.getByRole('button', { name: /Save address/i }));
     expect(onSave).toHaveBeenCalledWith(
-      expect.objectContaining({ line1: 'Gurumangat Road', lat: 31.52, lng: 74.35, city: 'Lahore' }),
+      expect.objectContaining({
+        line1: 'Explorer Drive',
+        lat: 43.628,
+        lng: -79.626,
+        city: 'Mississauga',
+        province: 'ON',
+        postcode: 'L4W 5K6',
+      }),
     );
   });
 
@@ -113,22 +149,52 @@ describe('address picker', () => {
 
     expect(mapClick).toBeTypeOf('function');
     fireEvent.click(document.body); // flush any pending focus work
-    mapClick!({ latlng: { lat: 31.6, lng: 74.4 } });
+    mapClick!({ latlng: { lat: 43.6, lng: -79.7 } });
 
     // The pin lands AND the address above follows it.
-    expect(await screen.findByText(/31\.60000, 74\.40000/)).toBeTruthy();
+    expect(await screen.findByText(/43\.60000, -79\.70000/)).toBeTruthy();
     await waitFor(async () => {
       const box = (await screen.findByPlaceholderText(/Search an address/i)) as HTMLInputElement;
       expect(box.value).toBe('Reverse Road');
     });
   });
 
+  /**
+   * The rule now: **the geocoder fills the fields, and then it stops.** Editing
+   * city, province or postal code afterwards is free typing — no request, no
+   * validation, and the pin stays exactly where it was put. The operator is
+   * standing in front of the customer; TomTom is not.
+   */
+  it('does not call any API when the structured fields are edited', async () => {
+    const user = userEvent.setup();
+    render(
+      <AddressField
+        label="Pickup address"
+        value={{ ...EMPTY, lat: 43.628, lng: -79.626 }}
+        onSave={() => {}}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: /Set address/i }));
+    expect(await screen.findByText(/43\.62800, -79\.62600/)).toBeTruthy();
+
+    const before = (fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.length;
+
+    await user.type(await screen.findByPlaceholderText('City'), 'Anywhere At All');
+    await user.type(screen.getByPlaceholderText('L4W 5H8'), 'Make Me Papa');
+    await new Promise((r) => setTimeout(r, 600));
+
+    const after = (fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.length;
+    expect(after).toBe(before);
+    // And the pin has not budged.
+    expect(screen.getByText(/43\.62800, -79\.62600/)).toBeTruthy();
+  });
+
   it('does not re-search the text it just wrote itself', async () => {
     const user = userEvent.setup();
     render(<AddressField label="Pickup address" value={EMPTY} onSave={() => {}} />);
     await user.click(screen.getByRole('button', { name: /Set address/i }));
-    await user.type(await screen.findByPlaceholderText(/Search an address/i), 'Gurumangat');
-    await user.click(await screen.findByText('Gurumangat Road'));
+    await user.type(await screen.findByPlaceholderText(/Search an address/i), 'Explorer');
+    await user.click(await screen.findByText('Explorer Drive'));
 
     const before = (fetch as unknown as { mock: { calls: unknown[][] } }).mock.calls.length;
     await new Promise((r) => setTimeout(r, 600));

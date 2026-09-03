@@ -16,7 +16,7 @@ interface TaskRowProps {
 }
 
 function timeLabel(pin: MapPinDto): string {
-  const iso = pin.deliverBy ?? pin.readyBy;
+  const iso = pin.deliverBefore ?? pin.pickupAfter;
   if (!iso) return '';
   return new Date(iso).toLocaleString([], {
     day: '2-digit',
@@ -69,8 +69,8 @@ export function TaskRow({
           )}
         </span>
         <span className="block truncate text-xs text-muted-foreground">
-          {pin.receiverArea ? `${pin.receiverArea}, ` : ''}
           {pin.receiverCity}
+          {pin.receiverProvince ? `, ${pin.receiverProvince}` : ''}
         </span>
         <span className="block truncate text-xs text-muted-foreground">{pin.receiverName}</span>
       </button>

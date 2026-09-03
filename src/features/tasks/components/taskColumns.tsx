@@ -28,7 +28,7 @@ export interface ColumnHandlers {
 const TEXT_ACCESSOR: Record<string, (t: Task) => string> = {
   recipient: (t) => t.recipient,
   description: (t) => t.description,
-  completeBefore: (t) => t.completeBefore,
+  deliverBefore: (t) => t.deliverBefore,
   createdTime: (t) => t.createdTime,
   type: (t) => t.type,
   dispatchAddress: (t) => t.dispatchAddress,
@@ -40,7 +40,7 @@ const TEXT_ACCESSOR: Record<string, (t: Task) => string> = {
   recipientPhone: (t) => t.recipientPhone,
   recipientEmail: (t) => t.recipientEmail,
   team: (t) => t.team,
-  completeAfter: (t) => t.completeAfter,
+  pickupAfter: (t) => t.pickupAfter,
   priority: (t) => t.priority,
   merchant: (t) => t.merchant,
   externalId: (t) => t.externalId,

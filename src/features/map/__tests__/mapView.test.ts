@@ -34,12 +34,14 @@ const pin = (over: Partial<MapPinDto> = {}): MapPinDto => ({
   receiverLat: 31.47,
   receiverLng: 74.41,
   receiverName: 'Sana Yousaf',
-  receiverLine1: 'House 214',
-  receiverArea: 'DHA Phase 5',
-  receiverCity: 'Lahore',
+  receiverLine1: '214 Bloor Street West',
+  receiverProvince: 'ON',
+  receiverCity: 'Toronto',
   totalQty: 1,
-  readyBy: null,
-  deliverBy: null,
+  pickupAfter: '2026-08-29T08:00:00.000Z',
+  pickupBefore: '2026-08-29T11:00:00.000Z',
+  deliverAfter: '2026-08-29T11:00:00.000Z',
+  deliverBefore: '2026-08-29T17:00:00.000Z',
   driver: null,
   ...over,
 });
@@ -244,7 +246,7 @@ describe('filtering', () => {
   it('searches address, customer, order number and driver', () => {
     const base: MapViewState = { ...initialMapView, taskTab: 'assigned' };
 
-    expect(visiblePins(pins, { ...base, query: 'dha' })).toHaveLength(2);
+    expect(visiblePins(pins, { ...base, query: 'bloor' })).toHaveLength(2);
     expect(visiblePins(pins, { ...base, query: 'Driver d1' }).map((p) => p.id)).toEqual(['a1']);
     expect(visiblePins(pins, { ...base, query: 'nothing here' })).toHaveLength(0);
   });

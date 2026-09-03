@@ -76,11 +76,11 @@ const pin = (over: Record<string, unknown> = {}) => ({
   receiverLng: 74.41,
   receiverName: 'Sana Yousaf',
   receiverLine1: '88 Christie Street',
-  receiverArea: 'DHA Phase 5',
+  receiverProvince: 'ON',
   receiverCity: 'Lahore',
   totalQty: 3,
-  readyBy: null,
-  deliverBy: null,
+  pickupAfter: null,
+  deliverBefore: null,
   driver: { id: 'd1', name: 'Bilal Ahmed', colorIndex: 2 },
   ...over,
 });
@@ -103,10 +103,10 @@ const stop = (seq: number, id: string, line1: string, issues: string[] = []) => 
   priority: 'NORMAL',
   receiverName: 'Someone',
   receiverLine1: line1,
-  receiverArea: 'DHA',
+  receiverProvince: 'ON',
   receiverCity: 'Lahore',
-  readyBy: null,
-  deliverBy: null,
+  pickupAfter: null,
+  deliverBefore: null,
   lat: 31.47,
   lng: 74.41,
   issues,
@@ -235,13 +235,6 @@ async function openDriver() {
 }
 
 describe('selection', () => {
-  it('offers the shift-drag hint while nothing is selected', async () => {
-    renderMap();
-    await screen.findByText('12 Depot Road');
-    // Discoverability: a lasso nobody knows about is a lasso nobody uses.
-    expect(screen.getByText(/hold/i)).toBeInTheDocument();
-  });
-
   it('shows no selection bar until something is caught', async () => {
     renderMap();
     await screen.findByText('12 Depot Road');

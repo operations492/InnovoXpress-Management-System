@@ -191,7 +191,7 @@ export function RoutePanel({
               <span className="ix-clip text-[12px] text-foreground">{stop.receiverLine1}</span>
               <span className="ix-clip text-[10px] text-muted-foreground">
                 {stop.orderNo}
-                {stop.receiverArea ? ` · ${stop.receiverArea}` : ''}
+                {stop.receiverCity ? ` · ${stop.receiverCity}` : ''}
               </span>
               {stop.issues.map((issue) => (
                 <span key={issue} className="text-[10px] text-warning">

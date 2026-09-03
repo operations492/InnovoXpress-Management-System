@@ -93,6 +93,18 @@ toasts live in `features/*/hooks/use*Actions.ts` and fire **after** the server a
   synchronous render while the session resolves.
 - **`weightKg` arrives as a string** from the driver list endpoint (Prisma `Decimal`) and a number from
   the detail endpoint. Coerce.
+- **Address text is unvalidated on purpose.** City, province and postal code are filled by the picker
+  from the geocoder and then left alone — no Zod refine, no DB CHECK, no format enforcement anywhere.
+  An operator who edits them is taken at their word. `CA_PROVINCES` still exists, but only as the
+  option list for the province `Select`.
+- **Geocoding is one-way: pin → text, never text → pin.** Picking a suggestion or dragging the pin
+  fills the fields; editing them afterwards costs no API call and does not move the pin.
+- **`src/lib/geocode.ts` is TomTom Search, not Photon.** Two shapes to know, both verified against the
+  live API: `/search` returns `position` as `{lat, lon}` while `/reverseGeocode` returns it as a
+  `"lat,lon"` **string** (read `.lat` off the string and every pin lands at NaN), and Canadian
+  `postalCode` is the **FSA only** — the full code is `extendedPostalCode` and is sometimes absent, so
+  the field is left empty rather than pre-filled with a three-character stub.
+- **Display order is city then province.** "Toronto, ON", never "ON, Toronto".
 
 ---
 
