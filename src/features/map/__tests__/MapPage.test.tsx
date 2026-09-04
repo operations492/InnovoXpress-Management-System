@@ -70,6 +70,7 @@ const pin = (over: Record<string, unknown> = {}) => ({
   senderLng: 74.35,
   receiverLat: 31.47,
   receiverLng: 74.41,
+  clientName: 'Daraz',
   receiverName: 'Sana Yousaf',
   receiverLine1: '88 Christie Street',
   receiverProvince: 'ON',

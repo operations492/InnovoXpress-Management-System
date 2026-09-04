@@ -33,6 +33,7 @@ const pin = (over: Partial<MapPinDto> = {}): MapPinDto => ({
   senderLng: 74.35,
   receiverLat: 31.47,
   receiverLng: 74.41,
+  clientName: 'Daraz',
   receiverName: 'Sana Yousaf',
   receiverLine1: '214 Bloor Street West',
   receiverProvince: 'ON',

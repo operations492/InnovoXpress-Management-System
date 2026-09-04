@@ -36,7 +36,6 @@ import type { UseFormReturn } from 'react-hook-form';
 import { Card, Checkbox, Input, Select, Textarea } from '@/ui';
 import type { TaskFormValues } from '@/domain/schemas';
 import { NO_CLIENT } from '@/domain/schemas';
-import { MERCHANT_OPTIONS } from '@/fixtures/reference';
 import { AddressField } from './AddressAutocomplete';
 import { DateTimeField } from './DateTimeField';
 
@@ -125,13 +124,13 @@ const Stack = ({ children }: { children: ReactNode }) => <div className="flex fl
 interface TaskFormProps {
   form: UseFormReturn<TaskFormValues>;
   itemsSlot?: ReactNode;
-  /** Real client names from the API. Falls back to the fixture list if absent. */
+  /** Real client names from the API. Only the "not selected" sentinel until they arrive. */
   clientOptions?: readonly string[];
 }
 
 export function TaskForm({ form, itemsSlot, clientOptions }: TaskFormProps) {
-  // Real clients when the API has answered, the fixture list until then.
-  const clients = clientOptions?.length ? [NO_CLIENT, ...clientOptions] : MERCHANT_OPTIONS;
+  // Never a fixture name here: a name the API does not know cannot be saved.
+  const clients = [NO_CLIENT, ...(clientOptions ?? [])];
 
   const { watch, setValue } = form;
   const v = watch();

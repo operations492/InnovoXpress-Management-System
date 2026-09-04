@@ -58,6 +58,9 @@ export function TaskRow({
         onClick={() => onOpen(pin.id)}
         className="ix-reset-btn min-w-0 flex-1 text-left"
       >
+        <span className="block truncate font-mono text-[10px] uppercase tracking-wide text-muted-foreground">
+          {pin.clientName}
+        </span>
         <span className="flex items-center gap-1.5">
           <span className="truncate text-sm font-medium text-foreground">{pin.receiverLine1}</span>
           {unplottable && (

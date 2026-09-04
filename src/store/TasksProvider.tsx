@@ -96,8 +96,7 @@ export function TasksProvider({ children }: { children: ReactNode }) {
     mutationFn: ({ id, values, items }: { id: string; values: TaskFormValues; items: TaskItem[] }) =>
       api.updateConsignment(
         id,
-        // clientId is create-only — an order cannot change hands.
-        toConsignmentPayload(values, items, clients.data?.clients ?? [], { includeClient: false }),
+        toConsignmentPayload(values, items, clients.data?.clients ?? []),
       ),
     onSuccess: invalidateAll,
   });

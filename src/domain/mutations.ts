@@ -7,6 +7,7 @@ import type { HistoryEvent, Task, TaskItem, TaskPriority } from './types';
 import type { TaskStatus } from './status';
 import { statusLabel } from './status';
 import type { ItemFormValues, TaskFormValues } from './schemas';
+import { NO_CLIENT } from './schemas';
 import { nowLabel, parseMoney } from './format';
 import { genId } from './id';
 
@@ -326,7 +327,7 @@ export function taskToFormValues(t: Task): TaskFormValues {
     taskType: t.type,
     priority: t.priority,
     externalId: t.externalId,
-    merchant: t.merchant || 'Merchant not selected',
+    merchant: t.merchant || NO_CLIENT,
     description: t.description,
     requester: t.requester,
     requesterPhone: t.requesterPhone,

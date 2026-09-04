@@ -354,7 +354,6 @@ export function toConsignmentPayload(
   values: TaskFormValues,
   items: TaskItem[],
   clients: Array<{ id: string; name: string }>,
-  opts: { includeClient?: boolean } = {},
 ) {
   const payload: Record<string, unknown> = {
     taskType: taskTypeToWire(values.taskType),
@@ -407,15 +406,13 @@ export function toConsignmentPayload(
   if (deliverAfter) payload.deliverAfter = deliverAfter;
   if (deliverBefore) payload.deliverBefore = deliverBefore;
 
-  // clientId is set on create only — the API refuses to move an order between
-  // clients, and sending an unknown key is a 400 (the schemas are strict).
-  if (opts.includeClient !== false) {
-    const name = values.merchant;
-    if (!name || name === NO_CLIENT) throw new MappingError('Choose a client first');
-    const client = clients.find((c) => c.name === name);
-    if (!client) throw new MappingError(`Unknown client "${name}"`);
-    payload.clientId = client.id;
-  }
+  // Sent on create and on update alike: the API accepts a client change on an
+  // editable order and validates the id against the clients table.
+  const name = values.merchant;
+  if (!name || name === NO_CLIENT) throw new MappingError('Choose a client first');
+  const client = clients.find((c) => c.name === name);
+  if (!client) throw new MappingError(`Unknown client "${name}"`);
+  payload.clientId = client.id;
 
   return payload;
 }

@@ -402,6 +402,7 @@ export interface MapPinDto {
   senderLng: number | null;
   receiverLat: number | null;
   receiverLng: number | null;
+  clientName: string;
   receiverName: string;
   receiverLine1: string;
   receiverProvince: string | null;

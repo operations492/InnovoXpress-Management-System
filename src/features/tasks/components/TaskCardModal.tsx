@@ -20,6 +20,7 @@ import { useItemsEditor } from '../hooks/useItemsEditor';
 import { TaskForm } from './TaskForm';
 import { ItemsEditor } from './ItemsEditor';
 import { ItemModal } from './ItemModal';
+import { useClients } from '@/store/TasksProvider';
 
 const TABS = [
   { value: 'overview', label: 'Overview' },
@@ -53,6 +54,7 @@ function InvoiceRow({ label, value, strong }: { label: string; value: string; st
 
 export function TaskCardModal({ open, task, onClose, onSave, onChangeStatus, onDelete }: TaskCardModalProps) {
   const { flash } = useToast();
+  const clientNames = useClients().map((c) => c.name);
   const form = useForm<TaskFormValues>({ resolver: zodResolver(taskFormSchema), defaultValues: { ...EMPTY_TASK_FORM, ...defaultWindows() } });
   const items = useItemsEditor(task?.items ?? []);
   const [tab, setTab] = useState('overview');
@@ -142,6 +144,7 @@ export function TaskCardModal({ open, task, onClose, onSave, onChangeStatus, onD
       {tab === 'overview' && (
         <TaskForm
           form={form}
+          clientOptions={clientNames}
           itemsSlot={
             <Card title="Items">
               <ItemsEditor
