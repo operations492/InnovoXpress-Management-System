@@ -72,6 +72,8 @@ export const taskFormSchema = z.object({
   priority: priorityEnum,
   externalId: z.string().trim().max(64),
   merchant: z.string(),
+  /** A service_levels row id, or '' for none. The API validates it, not the form. */
+  serviceLevelId: z.string(),
   description: z.string(),
 
   // Sender · pickup
@@ -129,6 +131,7 @@ export const EMPTY_TASK_FORM: TaskFormValues = {
   priority: 'Normal',
   externalId: '',
   merchant: 'Client not selected',
+  serviceLevelId: '',
   description: '',
   requester: '',
   requesterPhone: '',
@@ -214,6 +217,19 @@ export function missingRequired(v: TaskFormValues): string[] {
   return missing;
 }
 
+/** An optional numeric input: blank is fine, anything typed must parse. */
+const optionalNumber = (label: string) =>
+  z
+    .string()
+    .refine((v) => v.trim() === '' || Number.isFinite(Number(v)), `${label} must be a number`);
+
+/** An outer dimension in inches: optional, but never zero or negative. */
+const dimension = (label: string) =>
+  optionalNumber(label).refine(
+    (v) => v.trim() === '' || Number(v) > 0,
+    `${label} must be greater than zero`,
+  );
+
 /**
  * The Add/Edit Item modal. Numeric fields are strings here because HTML inputs
  * are strings; they are parsed in `buildItem`.
@@ -221,12 +237,13 @@ export function missingRequired(v: TaskFormValues): string[] {
  * The numeric rules are real, not cosmetic. Previously `qty` was a bare string
  * and `buildItem` silently did `Math.max(1, ...)` — so typing -5 produced 1 with
  * no explanation, and a negative weight was quietly dropped. Rejecting is
- * clearer than correcting behind the operator's back. These mirror the backend,
- * which enforces qty >= 1 and weightKg >= 0 in both Zod and a database CHECK.
+ * clearer than correcting behind the operator's back. These mirror the backend
+ * item schema: qty >= 1, weightLb >= 0, and each dimension > 0 when given.
  */
 export const itemFormSchema = z.object({
-  productId: z.string(),
-  product: z.string().trim().min(1, 'Description is required'),
+  /** The client's line reference — the "Reference" column. */
+  barcode: z.string(),
+  description: z.string().trim().min(1, 'Description is required'),
   qty: z
     .string()
     .trim()
@@ -234,25 +251,24 @@ export const itemFormSchema = z.object({
     .refine((v) => Number.isFinite(Number(v)), 'Quantity must be a number')
     .refine((v) => Number.isInteger(Number(v)), 'Quantity must be a whole number')
     .refine((v) => Number(v) >= 1, 'Quantity must be at least 1'),
-  lineTotal: z.string(),
-  weight: z
-    .string()
-    .refine((v) => v.trim() === '' || Number.isFinite(Number(v)), 'Weight must be a number')
-    .refine((v) => v.trim() === '' || Number(v) >= 0, 'Weight cannot be negative'),
-  barcode: z.string(),
-  pkg: z.string(),
-  orderId: z.string(),
+  /** Weight of the whole line in pounds, as typed. */
+  weightLb: optionalNumber('Weight').refine(
+    (v) => v.trim() === '' || Number(v) >= 0,
+    'Weight cannot be negative',
+  ),
+  lengthIn: dimension('Length'),
+  widthIn: dimension('Width'),
+  heightIn: dimension('Height'),
 });
 
 export type ItemFormValues = z.infer<typeof itemFormSchema>;
 
 export const EMPTY_ITEM: ItemFormValues = {
-  productId: '',
-  product: '',
-  qty: '1',
-  lineTotal: '',
-  weight: '',
   barcode: '',
-  pkg: '',
-  orderId: '',
+  description: '',
+  qty: '1',
+  weightLb: '',
+  lengthIn: '',
+  widthIn: '',
+  heightIn: '',
 };

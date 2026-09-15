@@ -6,8 +6,6 @@ export const MERCHANT_OPTIONS = ['Merchant not selected', ...MERCHANTS];
 
 export const TEAMS = ['Team not assigned', 'Default Team'];
 
-export const PACKAGE_TYPES = ['Box', 'Bottle', 'Envelope', 'Pallet'];
-
 export const REQUIREMENT_OPTIONS = ['None', 'All (5)', 'Photo', 'Signature'];
 
 /**

@@ -140,17 +140,54 @@ export function totals(rows: Task[]): RowTotals {
   );
 }
 
-export interface ItemTotals {
-  qty: number;
-  total: number;
-  weight: number;
+/* -------------------------------------------------------------------- items */
+
+/** Same constant the API uses, so a client-side cubic matches the server's. */
+export const CUBIC_INCHES_PER_CUBIC_METRE = 61_023.744;
+
+export interface ItemDims {
+  lengthIn: number | null;
+  widthIn: number | null;
+  heightIn: number | null;
 }
 
+/**
+ * Cubic metres from outer dimensions in inches, rounded to 4 places exactly as
+ * the API does. Null until all three dimensions are present — a partial box
+ * has no honest volume.
+ */
+export function cubicOf(i: ItemDims): number | null {
+  if (i.lengthIn === null || i.widthIn === null || i.heightIn === null) return null;
+  const cubicInches = i.lengthIn * i.widthIn * i.heightIn;
+  return Number((cubicInches / CUBIC_INCHES_PER_CUBIC_METRE).toFixed(4));
+}
+
+export interface ItemTotals {
+  qty: number;
+  /** Pounds, to 3 places. */
+  weightLb: number;
+  /** Cubic metres, to 4 places. */
+  cubic: number;
+}
+
+/**
+ * Footer totals for the items table. Rounded the same way as the API's
+ * `totals`, so the figure under the table never disagrees with the detail.
+ */
 export function itemsGrandTotal(items: TaskItem[]): ItemTotals {
-  return items.reduce<ItemTotals>(
-    (a, it) => ({ qty: a.qty + it.qty, total: a.total + it.lineTotal, weight: a.weight + it.weight }),
-    { qty: 0, total: 0, weight: 0 },
+  const sum = items.reduce(
+    (a, it) => ({
+      qty: a.qty + it.qty,
+      weightLb: a.weightLb + (it.weightLb ?? 0),
+      cubic: a.cubic + (it.cubic ?? cubicOf(it) ?? 0),
+    }),
+    { qty: 0, weightLb: 0, cubic: 0 },
   );
+  return {
+    qty: sum.qty,
+    weightLb: Number(sum.weightLb.toFixed(3)),
+    cubic: Number(sum.cubic.toFixed(4)),
+  };
 }
 
 export interface DriverWithLoad extends Driver {

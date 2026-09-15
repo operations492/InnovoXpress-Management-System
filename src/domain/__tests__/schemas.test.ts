@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { EMPTY_ITEM, EMPTY_TASK_FORM, itemFormSchema, missingRequired } from '../schemas';
 
-const item = (over: Partial<typeof EMPTY_ITEM> = {}) => ({ ...EMPTY_ITEM, product: 'Box of parts', ...over });
+const item = (over: Partial<typeof EMPTY_ITEM> = {}) => ({
+  ...EMPTY_ITEM,
+  description: 'Box of parts',
+  ...over,
+});
 
 function errorFor(field: string, over: Partial<typeof EMPTY_ITEM>) {
   const res = itemFormSchema.safeParse(item(over));
@@ -38,22 +42,37 @@ describe('item quantity', () => {
 
 describe('item weight', () => {
   it('allows an empty weight — it is optional', () => {
-    expect(itemFormSchema.safeParse(item({ weight: '' })).success).toBe(true);
+    expect(itemFormSchema.safeParse(item({ weightLb: '' })).success).toBe(true);
   });
 
   it('allows zero and positive weights', () => {
-    expect(itemFormSchema.safeParse(item({ weight: '0' })).success).toBe(true);
-    expect(itemFormSchema.safeParse(item({ weight: '2.75' })).success).toBe(true);
+    expect(itemFormSchema.safeParse(item({ weightLb: '0' })).success).toBe(true);
+    expect(itemFormSchema.safeParse(item({ weightLb: '2.75' })).success).toBe(true);
   });
 
   it('rejects a negative weight instead of silently dropping it', () => {
-    expect(errorFor('weight', { weight: '-1' })).toBe('Weight cannot be negative');
+    expect(errorFor('weightLb', { weightLb: '-1' })).toBe('Weight cannot be negative');
+  });
+});
+
+describe('item dimensions', () => {
+  it('allows blank dimensions — a line need not be measured', () => {
+    expect(itemFormSchema.safeParse(item({ lengthIn: '', widthIn: '', heightIn: '' })).success).toBe(true);
+  });
+
+  it('rejects zero and negative dimensions, matching the API', () => {
+    expect(errorFor('lengthIn', { lengthIn: '0' })).toBe('Length must be greater than zero');
+    expect(errorFor('heightIn', { heightIn: '-2' })).toBe('Height must be greater than zero');
+  });
+
+  it('rejects text', () => {
+    expect(errorFor('widthIn', { widthIn: 'wide' })).toBe('Width must be a number');
   });
 });
 
 describe('item description', () => {
   it('is required', () => {
-    expect(errorFor('product', { product: '   ' })).toBe('Description is required');
+    expect(errorFor('description', { description: '   ' })).toBe('Description is required');
   });
 });
 

@@ -16,24 +16,28 @@ import type { TaskStatus } from './status';
 export type TaskType = 'Delivery' | 'Pickup' | 'Pickup & Delivery';
 export type TaskPriority = 'Normal' | 'High' | 'Low';
 
+/**
+ * One consignment line, mirroring the API's item shape. Optional figures are
+ * `null` when the operator left them blank — never 0, because "no weight given"
+ * and "weighs nothing" are different facts and the table shows them differently.
+ */
 export interface TaskItem {
   id: string;
-  /** "Product ID" from the item modal. */
-  productId: string;
-  /** Display name (the item modal's "Product Description"). */
-  product: string;
+  /** The client's line reference — the "Reference" column. Empty when none. */
+  barcode: string;
   description: string;
   qty: number;
-  /** Numeric; formatted with the currency symbol on display. */
-  lineTotal: number;
-  /** Kilograms, numeric; formatted on display. */
-  weight: number;
-  barcode: string;
-  /** Package type (Box / Bottle / Envelope). */
-  pkg: string;
-  orderId: string;
-  /** Derived: `(barcode || productId)` + (pkg ? ` · ${pkg}` : ''). */
-  sku: string;
+  /** Weight of the whole line in pounds, as typed. Not per unit. */
+  weightLb: number | null;
+  /** Outer dimensions in inches. */
+  lengthIn: number | null;
+  widthIn: number | null;
+  heightIn: number | null;
+  /**
+   * Cubic metres, derived from the three dimensions (`derive.cubicOf`) and
+   * null until all three are present. Display only; never sent to the API.
+   */
+  cubic: number | null;
 }
 
 export interface HistoryEvent {
@@ -63,6 +67,10 @@ export interface Task {
   driverAssigned: boolean;
 
   merchant: string;
+  /** Service level row id, '' when none — the form and the payload speak in ids. */
+  serviceLevelId: string;
+  /** Service level name for display, '' when none. */
+  serviceLevel: string;
   description: string;
 
   // Destination / recipient (the receiver snapshot).

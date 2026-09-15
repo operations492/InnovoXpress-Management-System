@@ -16,9 +16,22 @@ export function money(n: number): string {
   return `${CURRENCY}${safe(n).toFixed(2)}`;
 }
 
-/** Weight in kilograms. e.g. weightKg(0.5) → "0.50 KG". */
-export function weightKg(n: number): string {
-  return `${safe(n).toFixed(2)} KG`;
+/**
+ * A plain decimal for a column whose unit sits in the header ("Total Weight
+ * (lb)"): 14 → "14", 1.9 → "1.9", 0.0479 → "0.0479". A blank figure renders
+ * as a dash rather than a confident 0, because "not entered" and "zero" differ.
+ */
+export function decimal(n: number | null | undefined, maxFractionDigits = 2): string {
+  if (n === null || n === undefined || !Number.isFinite(n)) return '—';
+  return n.toLocaleString('en-CA', { maximumFractionDigits: maxFractionDigits });
+}
+
+/** Parse an optional numeric input: blank or unparseable → null, never 0. */
+export function parseOptionalNumber(v: string): number | null {
+  const s = String(v).trim();
+  if (s === '') return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
 }
 
 /** Integer-ish display of a quantity. */

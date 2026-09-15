@@ -2,11 +2,12 @@ import { useEffect } from 'react';
 import type { ChangeEvent, ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Button, Input, Modal, Select } from '@/ui';
+import { Button, Input, Modal } from '@/ui';
 import { cn } from '@/lib/utils';
 import { EMPTY_ITEM, itemFormSchema } from '@/domain/schemas';
 import type { ItemFormValues } from '@/domain/schemas';
-import { PACKAGE_TYPES } from '@/fixtures/reference';
+import { cubicOf } from '@/domain/derive';
+import { decimal, parseOptionalNumber } from '@/domain/format';
 
 interface ItemModalProps {
   open: boolean;
@@ -73,8 +74,16 @@ export function ItemModal({ open, editing, initial, onClose, onSaveClose, onSave
 
   const text = (name: keyof ItemFormValues) => ({
     value: String(v[name] ?? ''),
-    onChange: (e: ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    onChange: (e: ChangeEvent<HTMLInputElement>) =>
       setValue(name, e.target.value as never, { shouldDirty: true }),
+  });
+
+  // Cubic is never typed: it is read off the three dimensions as they are
+  // entered, with the same formula the API applies on save.
+  const cubic = cubicOf({
+    lengthIn: parseOptionalNumber(v.lengthIn),
+    widthIn: parseOptionalNumber(v.widthIn),
+    heightIn: parseOptionalNumber(v.heightIn),
   });
 
   const saveClose = handleSubmit((values) => onSaveClose(values));
@@ -87,8 +96,8 @@ export function ItemModal({ open, editing, initial, onClose, onSaveClose, onSave
     <Modal
       open={open}
       onClose={onClose}
-      title={editing ? 'Edit Item / Package' : 'New Item / Package'}
-      width={520}
+      title={editing ? 'Edit Consignment Item' : 'New Consignment Item'}
+      width={560}
       footer={
         <>
           <Button variant="utility" size="sm" onClick={onClose}>
@@ -109,44 +118,38 @@ export function ItemModal({ open, editing, initial, onClose, onSaveClose, onSave
     >
       <div className="flex flex-col gap-3">
         <div className="flex gap-3">
-          <Field label="Product ID">
-            <Input placeholder="Product ID" {...text('productId')} />
+          <Field label="Reference">
+            <Input placeholder="Client reference" {...text('barcode')} />
           </Field>
-          <Field label="Order ID">
-            <Input placeholder="Order ID" {...text('orderId')} />
+          <Field label="Qty" required grow={false} error={errors.qty?.message}>
+            {/* min=1 stops the browser's spinner going negative; the schema is
+                what actually enforces it, since the field can still be typed. */}
+            <Input type="number" min={1} step={1} align="right" className="w-24" {...text('qty')} />
           </Field>
         </div>
 
-        <Field
-          label="Product Description"
-          required
-          grow={false}
-          error={errors.product?.message}
-        >
-          <Input placeholder="Product description" {...text('product')} />
+        <Field label="Description" required grow={false} error={errors.description?.message}>
+          <Input placeholder="Item description" {...text('description')} />
         </Field>
 
         <div className="flex gap-3">
-          <Field label="Quantity" required error={errors.qty?.message}>
-            {/* min=1 stops the browser's spinner going negative; the schema is
-                what actually enforces it, since the field can still be typed. */}
-            <Input type="number" min={1} step={1} align="right" {...text('qty')} />
+          <Field label="Total Weight (lb)" error={errors.weightLb?.message}>
+            {/* The weight of the whole line as typed, not per unit. */}
+            <Input type="number" min={0} step="any" align="right" {...text('weightLb')} />
           </Field>
-          <Field label="Line Total ($)">
-            <Input type="number" align="right" {...text('lineTotal')} />
+          <Field label="Length (in)" error={errors.lengthIn?.message}>
+            <Input type="number" min={0} step="any" align="right" {...text('lengthIn')} />
           </Field>
-          <Field label="Weight (KG)" error={errors.weight?.message}>
-            <Input type="number" min={0} step="any" align="right" {...text('weight')} />
+          <Field label="Width (in)" error={errors.widthIn?.message}>
+            <Input type="number" min={0} step="any" align="right" {...text('widthIn')} />
+          </Field>
+          <Field label="Height (in)" error={errors.heightIn?.message}>
+            <Input type="number" min={0} step="any" align="right" {...text('heightIn')} />
           </Field>
         </div>
 
-        <div className="flex gap-3">
-          <Field label="Barcode">
-            <Input placeholder="Barcode" {...text('barcode')} />
-          </Field>
-          <Field label="Package Type">
-            <Select placeholder="Select…" options={PACKAGE_TYPES} {...text('pkg')} />
-          </Field>
+        <div className="tnum text-xs text-muted-foreground" aria-live="polite">
+          Cubic: {cubic === null ? '— (needs length, width and height)' : `${decimal(cubic, 4)} m³`}
         </div>
       </div>
     </Modal>

@@ -129,11 +129,28 @@ export interface DriverDto {
 
 export interface ItemDto {
   id: string;
+  /** The client's line reference — the "Reference" column. */
+  barcode: string | null;
   description: string;
   qty: number;
-  weightKg: number | null;
-  packageType: string | null;
-  barcode: string | null;
+  /** Weight of the whole line in pounds, as typed. Not per unit. */
+  weightLb: number | null;
+  /** Outer dimensions in inches. */
+  lengthIn: number | null;
+  widthIn: number | null;
+  heightIn: number | null;
+  /**
+   * Cubic metres, derived server-side from the three dimensions. Read-only:
+   * the item schema is strict, so sending it back is a 400.
+   */
+  cubic: number | null;
+}
+
+export interface ItemTotalsDto {
+  itemCount: number;
+  totalQty: number;
+  totalWeightLb: number;
+  totalCubic: number;
 }
 
 export interface TimelineDto {
@@ -269,8 +286,10 @@ export interface ConsignmentDto {
   pickedUpAt: string | null;
   deliveredAt: string | null;
   generalNote: string | null;
+  /** The chosen level, or null. A retired level still comes back on old orders. */
+  serviceLevel: { id: string; name: string } | null;
   items: ItemDto[];
-  totals: { itemCount: number; totalQty: number; totalWeightKg: number };
+  totals: ItemTotalsDto;
   proofs: Array<{ leg: string; capturedAt: string }>;
   timeline: TimelineDto[];
   createdAt: string;
@@ -604,10 +623,11 @@ export const api = {
     get<{
       clients: ClientDto[];
       drivers: Array<{ id: string; name: string; code: string | null; mobile: string | null }>;
+      /** Active levels only, in dropdown order. */
+      serviceLevels: Array<{ id: string; name: string }>;
       statuses: Array<{ value: string; label: string }>;
       priorities: Array<{ value: string; label: string }>;
       taskTypes: Array<{ value: string; label: string }>;
-      packageTypes: Array<{ value: string; label: string }>;
     }>('/api/reference'),
 
   listConsignments: (params: Record<string, string | number | undefined> = {}) => {

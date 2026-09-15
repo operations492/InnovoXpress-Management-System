@@ -17,6 +17,7 @@ import type { ConsignmentDto, ItemDto, TimelineDto } from '@/lib/api';
 import type { HistoryEvent, Task, TaskItem, TaskPriority, TaskType } from './types';
 import type { TaskStatus } from './status';
 import { NO_CLIENT, type TaskFormValues } from './schemas';
+import { cubicOf } from './derive';
 import { toISO } from './format';
 
 /* ------------------------------------------------------------------ date/time */
@@ -56,22 +57,6 @@ function toIsoOrUndefined(display: string): string | undefined {
 
 /* -------------------------------------------------------------------- enums */
 
-const PACKAGE_TO_UI: Record<string, string> = {
-  BOX: 'Box',
-  BOTTLE: 'Bottle',
-  ENVELOPE: 'Envelope',
-  PALLET: 'Pallet',
-  OTHER: 'Other',
-};
-
-const PACKAGE_TO_WIRE: Record<string, string> = {
-  box: 'BOX',
-  bottle: 'BOTTLE',
-  envelope: 'ENVELOPE',
-  pallet: 'PALLET',
-  other: 'OTHER',
-};
-
 const taskTypeToUi = (v: string): TaskType =>
   v === 'PICKUP' ? 'Pickup' : v === 'PICKUP_AND_DELIVERY' ? 'Pickup & Delivery' : 'Delivery';
 
@@ -85,38 +70,41 @@ const priorityToWire = (v: TaskPriority) => v.toUpperCase();
 /* -------------------------------------------------------------------- items */
 
 function itemToUi(dto: ItemDto): TaskItem {
-  const pkg = dto.packageType ? (PACKAGE_TO_UI[dto.packageType] ?? 'Other') : '';
-  const barcode = dto.barcode ?? '';
+  const dims = { lengthIn: dto.lengthIn, widthIn: dto.widthIn, heightIn: dto.heightIn };
   return {
     // The real database id. Carrying it through is what makes editing a keyed
     // diff rather than a delete-and-recreate of the whole item list.
     id: dto.id,
-    productId: '',
-    product: dto.description,
+    barcode: dto.barcode ?? '',
     description: dto.description,
     qty: dto.qty,
-    lineTotal: 0,
-    weight: dto.weightKg ?? 0,
-    barcode,
-    pkg,
-    orderId: '',
-    sku: barcode ? `${barcode}${pkg ? ` · ${pkg}` : ''}` : pkg,
+    weightLb: dto.weightLb,
+    ...dims,
+    // The server derives cubic from the same three numbers with the same
+    // formula; the local fallback only matters for a response that omits it.
+    cubic: dto.cubic ?? cubicOf(dims),
   };
 }
 
+/** Omit a blank figure rather than sending null — the item schema is strict. */
+const figure = <K extends string>(key: K, value: number | null) =>
+  value === null ? {} : ({ [key]: value } as Record<K, number>);
+
 function itemToWire(item: TaskItem) {
-  const pkg = PACKAGE_TO_WIRE[item.pkg.trim().toLowerCase()];
   return {
     // Only send ids that came from the server. A client-generated id would be
     // rejected as "does not belong to this consignment".
     ...(isServerId(item.id) ? { id: item.id } : {}),
-    description: item.description || item.product || 'Item',
+    ...(item.barcode.trim() ? { barcode: item.barcode.trim() } : {}),
+    description: item.description || 'Item',
     // The form now rejects anything below 1, so this is a floor for legacy rows
     // rather than a silent correction of what the operator typed.
     qty: Math.max(1, Math.round(item.qty || 1)),
-    ...(item.weight >= 0 && item.weight !== 0 ? { weightKg: item.weight } : {}),
-    ...(pkg ? { packageType: pkg } : {}),
-    ...(item.barcode.trim() ? { barcode: item.barcode.trim() } : {}),
+    ...figure('weightLb', item.weightLb),
+    ...figure('lengthIn', item.lengthIn),
+    ...figure('widthIn', item.widthIn),
+    ...figure('heightIn', item.heightIn),
+    // `cubic` is deliberately absent: the API derives it and rejects it as input.
   };
 }
 
@@ -156,6 +144,7 @@ export interface SummaryRow {
   clientReference: string | null;
   client: { id: string; name: string; code: string };
   driver: { id: string; name: string } | null;
+  serviceLevel: { id: string; name: string } | null;
   status: string;
   statusLabel: string;
   priority: string;
@@ -180,7 +169,8 @@ export interface SummaryRow {
   createdAt: string;
   itemCount: number;
   totalQty: number;
-  totalWeightKg: number;
+  totalWeightLb: number;
+  totalCubic: number;
 }
 
 /** Fields shared by the grid row and the full record. */
@@ -189,6 +179,7 @@ function baseTask(src: {
   orderNo: string;
   clientReference: string | null;
   clientName: string;
+  serviceLevel: { id: string; name: string } | null;
   driverName: string | null;
   driverId: string | null;
   status: string;
@@ -224,6 +215,8 @@ function baseTask(src: {
     driverId: src.driverId ?? '',
     driverAssigned: !!src.driverName,
     merchant: src.clientName,
+    serviceLevelId: src.serviceLevel?.id ?? '',
+    serviceLevel: src.serviceLevel?.name ?? '',
     description: src.generalNote ?? '',
     pickupAfter: shortStamp(src.pickupAfter),
     pickupBefore: shortStamp(src.pickupBefore),
@@ -254,6 +247,7 @@ export function summaryToTask(row: SummaryRow): Task {
       orderNo: row.orderNo,
       clientReference: row.clientReference,
       clientName: row.client.name,
+      serviceLevel: row.serviceLevel,
       driverName: row.driver?.name ?? null,
       driverId: row.driver?.id ?? null,
       status: row.status,
@@ -301,6 +295,7 @@ export function detailToTask(dto: ConsignmentDto): Task {
       orderNo: dto.orderNo,
       clientReference: dto.clientReference,
       clientName: dto.client.name,
+      serviceLevel: dto.serviceLevel,
       driverName: dto.driver?.name ?? null,
       driverId: dto.driver?.id ?? null,
       status: dto.status,
@@ -394,6 +389,11 @@ export function toConsignmentPayload(
 
   if (values.externalId.trim()) payload.clientReference = values.externalId.trim();
   if (values.description.trim()) payload.generalNote = values.description.trim();
+
+  // Only ever an id the API can validate. An empty choice is omitted rather
+  // than sent as null: create rejects null, and on update "omitted" means
+  // "leave as is", which is the safe reading of a select nobody touched.
+  if (values.serviceLevelId) payload.serviceLevelId = values.serviceLevelId;
 
   const pickupAfter = toIsoOrUndefined(values.pickupAfter);
   const pickupBefore = toIsoOrUndefined(values.pickupBefore);

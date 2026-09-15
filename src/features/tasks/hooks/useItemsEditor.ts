@@ -3,16 +3,18 @@ import type { TaskItem } from '@/domain/types';
 import type { ItemFormValues } from '@/domain/schemas';
 import { buildItem } from '@/domain/mutations';
 
+/** Null figures become empty inputs, so a blank stays blank on edit. */
+const str = (n: number | null) => (n === null ? '' : String(n));
+
 function toItemForm(it: TaskItem): ItemFormValues {
   return {
-    productId: it.productId,
-    product: it.product,
-    qty: String(it.qty),
-    lineTotal: String(it.lineTotal),
-    weight: String(it.weight),
     barcode: it.barcode,
-    pkg: it.pkg,
-    orderId: it.orderId,
+    description: it.description,
+    qty: String(it.qty),
+    weightLb: str(it.weightLb),
+    lengthIn: str(it.lengthIn),
+    widthIn: str(it.widthIn),
+    heightIn: str(it.heightIn),
   };
 }
 

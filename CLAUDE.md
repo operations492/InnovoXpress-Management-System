@@ -12,7 +12,7 @@
 The operator-facing web console. Vite · React 19 · TypeScript · Tailwind v4 · shadcn/Radix ·
 TanStack Query · React Hook Form + Zod · React Router 7 · Leaflet · `@supabase/supabase-js`.
 
-**203 tests across 22 files** (Vitest + Testing Library, jsdom). Run them rather than trusting that
+**213 tests across 22 files** (Vitest + Testing Library, jsdom). Run them rather than trusting that
 number — it moves as features land.
 
 ---
@@ -136,8 +136,15 @@ Its default marker icon breaks under the bundler, so **always `L.divIcon`**. Bey
 
 ## 5. Deliberately inert
 
-Fields with no backend column — COD, delivery fee, crew, handling, additional services, suite/floor, item
-Product ID / Order ID / Line Total — stay on screen and simply do not persist. **Leave them alone.**
+Fields with no backend column — COD, delivery fee, crew, handling, additional services, suite/floor —
+stay on screen and simply do not persist. **Leave them alone.**
+
+Consignment items are no longer on that list. An item is exactly what the API takes and returns:
+`barcode` (the Reference column), `description`, `qty`, `weightLb` (the whole line, as typed),
+`lengthIn` / `widthIn` / `heightIn`, and a read-only `cubic` the server derives. `derive.cubicOf` uses the
+same constant and rounding as the backend so the figure shown before save matches the one after.
+Blank figures are `null`, never 0, and render as a dash. There is no package type, line total, product
+id or order id anywhere any more.
 
 Finance pages are out of scope and still on in-memory fixtures.
 

@@ -16,6 +16,8 @@ export function makeTask(partial: Partial<Task> = {}): Task {
     driverId: '',
     driverAssigned: false,
     merchant: 'Mini Mart',
+    serviceLevelId: '',
+    serviceLevel: '',
     description: '',
     dest: '',
     destBuilding: '',

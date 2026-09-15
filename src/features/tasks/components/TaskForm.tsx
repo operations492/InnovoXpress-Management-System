@@ -126,9 +126,14 @@ interface TaskFormProps {
   itemsSlot?: ReactNode;
   /** Real client names from the API. Only the "not selected" sentinel until they arrive. */
   clientOptions?: readonly string[];
+  /**
+   * Active service levels as {value: id, label: name}. The select renders only
+   * when this is given, so a screen that has not adopted it shows nothing new.
+   */
+  serviceLevelOptions?: readonly { value: string; label: string }[];
 }
 
-export function TaskForm({ form, itemsSlot, clientOptions }: TaskFormProps) {
+export function TaskForm({ form, itemsSlot, clientOptions, serviceLevelOptions }: TaskFormProps) {
   // Never a fixture name here: a name the API does not know cannot be saved.
   const clients = [NO_CLIENT, ...(clientOptions ?? [])];
 
@@ -156,6 +161,15 @@ export function TaskForm({ form, itemsSlot, clientOptions }: TaskFormProps) {
             <Field label="Client" required>
               <Select options={clients} {...text('merchant')} />
             </Field>
+            {serviceLevelOptions && (
+              <Field label="Service level">
+                <Select
+                  placeholder="No service level"
+                  options={[...serviceLevelOptions]}
+                  {...text('serviceLevelId')}
+                />
+              </Field>
+            )}
             <Field label="Reference">
               <Input placeholder="e.g. Purolator #" {...text('externalId')} />
             </Field>

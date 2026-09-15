@@ -13,16 +13,14 @@ import type { TaskItem } from '@/domain/types';
 
 const item = (o: Partial<TaskItem>): TaskItem => ({
   id: 'i',
-  productId: '',
-  product: 'P',
-  description: '',
-  qty: 1,
-  lineTotal: 0,
-  weight: 0,
   barcode: '',
-  pkg: '',
-  orderId: '',
-  sku: '',
+  description: 'P',
+  qty: 1,
+  weightLb: null,
+  lengthIn: null,
+  widthIn: null,
+  heightIn: null,
+  cubic: null,
   ...o,
 });
 
@@ -73,9 +71,18 @@ describe('totals + itemsGrandTotal', () => {
     expect(t).toEqual({ count: 2, fee: 5, cod: 25 });
   });
 
-  it('sums item qty/total/weight', () => {
-    const g = itemsGrandTotal([item({ qty: 2, lineTotal: 1.5, weight: 0.5 }), item({ qty: 1, lineTotal: 4, weight: 2 })]);
-    expect(g).toEqual({ qty: 3, total: 5.5, weight: 2.5 });
+  it('sums item qty/weight/cubic, treating blank figures as 0', () => {
+    const g = itemsGrandTotal([
+      item({ qty: 2, weightLb: 14, cubic: 0.0479 }),
+      item({ qty: 1, weightLb: 1.9, cubic: 0.0069 }),
+      item({ qty: 1, weightLb: null, cubic: null }),
+    ]);
+    expect(g).toEqual({ qty: 4, weightLb: 15.9, cubic: 0.0548 });
+  });
+
+  it('derives cubic from dimensions when an item carries none', () => {
+    const g = itemsGrandTotal([item({ lengthIn: 15, widthIn: 13, heightIn: 15 })]);
+    expect(g.cubic).toBe(0.0479);
   });
 });
 

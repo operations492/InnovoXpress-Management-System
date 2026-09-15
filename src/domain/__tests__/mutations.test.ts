@@ -92,12 +92,30 @@ describe('createTask / updateTask / deleteMany', () => {
 });
 
 describe('items + requirements', () => {
-  it('buildItem parses numbers and derives sku', () => {
-    const it = buildItem({ ...EMPTY_ITEM, productId: '991', pkg: 'Box', qty: '3', lineTotal: '4.5', weight: '2' });
+  it('buildItem parses numbers and derives cubic from the three dimensions', () => {
+    const it = buildItem({
+      ...EMPTY_ITEM,
+      barcode: ' LKA001450097 ',
+      description: 'ITEM',
+      qty: '3',
+      weightLb: '14',
+      lengthIn: '15',
+      widthIn: '13',
+      heightIn: '15',
+    });
+    expect(it.barcode).toBe('LKA001450097');
     expect(it.qty).toBe(3);
-    expect(it.lineTotal).toBe(4.5);
-    expect(it.weight).toBe(2);
-    expect(it.sku).toBe('991 · Box');
+    expect(it.weightLb).toBe(14);
+    expect(it.lengthIn).toBe(15);
+    // 15 × 13 × 15 in³ = 2925 in³ → 0.0479 m³, rounded as the API rounds it.
+    expect(it.cubic).toBe(0.0479);
+  });
+
+  it('buildItem keeps blank figures null and leaves cubic null without all three dimensions', () => {
+    const it = buildItem({ ...EMPTY_ITEM, description: 'ITEM', lengthIn: '10', widthIn: '7' });
+    expect(it.weightLb).toBeNull();
+    expect(it.heightIn).toBeNull();
+    expect(it.cubic).toBeNull();
   });
 
   it('expandRequirements / requirementsLabel round-trip', () => {

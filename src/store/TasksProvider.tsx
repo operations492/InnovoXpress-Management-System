@@ -156,3 +156,13 @@ export function useClients() {
   });
   return data?.clients ?? [];
 }
+
+/** Active service levels in dropdown order, for the consignment form. */
+export function useServiceLevels() {
+  const { data } = useQuery({
+    queryKey: REFERENCE_KEY,
+    queryFn: () => api.reference(),
+    staleTime: 5 * 60_000,
+  });
+  return data?.serviceLevels ?? [];
+}

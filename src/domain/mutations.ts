@@ -8,7 +8,8 @@ import type { TaskStatus } from './status';
 import { statusLabel } from './status';
 import type { ItemFormValues, TaskFormValues } from './schemas';
 import { NO_CLIENT } from './schemas';
-import { nowLabel, parseMoney } from './format';
+import { cubicOf } from './derive';
+import { nowLabel, parseMoney, parseOptionalNumber } from './format';
 import { genId } from './id';
 
 export const DEFAULT_DRIVER = 'Muhammad Abdullah';
@@ -47,22 +48,20 @@ export function requirementsLabel(reqs: string[]): string {
 /* -------------------------------------------------------------------- Items */
 
 export function buildItem(values: ItemFormValues, id: string = genId()): TaskItem {
-  const sku = [values.barcode || values.productId, values.pkg].filter(Boolean).join(' · ');
   const qty = Math.max(1, Math.round(Number(values.qty) || 1));
-  const lineTotal = Number(values.lineTotal) || 0;
-  const weight = Number(values.weight) || 0;
+  const dims = {
+    lengthIn: parseOptionalNumber(values.lengthIn),
+    widthIn: parseOptionalNumber(values.widthIn),
+    heightIn: parseOptionalNumber(values.heightIn),
+  };
   return {
     id,
-    productId: values.productId,
-    product: values.product,
-    description: values.product,
+    barcode: values.barcode.trim(),
+    description: values.description.trim(),
     qty,
-    lineTotal,
-    weight,
-    barcode: values.barcode,
-    pkg: values.pkg,
-    orderId: values.orderId,
-    sku,
+    weightLb: parseOptionalNumber(values.weightLb),
+    ...dims,
+    cubic: cubicOf(dims),
   };
 }
 
@@ -208,6 +207,9 @@ export function createTask(
     driverId: '',
     driverAssigned: false,
     merchant: values.merchant,
+    serviceLevelId: values.serviceLevelId,
+    // The name is resolved by the API; the local model only knows the id.
+    serviceLevel: '',
     description: values.description,
     dest: values.dest,
     destBuilding: values.destBuilding,
@@ -275,6 +277,8 @@ export function updateTask(
       type: values.taskType,
       priority: values.priority,
       merchant: values.merchant,
+      serviceLevelId: values.serviceLevelId,
+      serviceLevel: values.serviceLevelId === t.serviceLevelId ? t.serviceLevel : '',
       description: values.description,
       dest: values.dest,
       destBuilding: values.destBuilding,
@@ -328,6 +332,7 @@ export function taskToFormValues(t: Task): TaskFormValues {
     priority: t.priority,
     externalId: t.externalId,
     merchant: t.merchant || NO_CLIENT,
+    serviceLevelId: t.serviceLevelId,
     description: t.description,
     requester: t.requester,
     requesterPhone: t.requesterPhone,

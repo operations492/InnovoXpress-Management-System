@@ -58,7 +58,7 @@ vi.mock('@/lib/api', () => {
         statuses: [],
         priorities: [],
         taskTypes: [],
-        packageTypes: [],
+        serviceLevels: [],
       }),
       listDrivers: vi.fn().mockResolvedValue({ data: [] }),
       getConsignment: vi.fn(),

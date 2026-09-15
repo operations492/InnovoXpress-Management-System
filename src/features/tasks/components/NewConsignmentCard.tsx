@@ -22,7 +22,7 @@ import { useItemsEditor } from '../hooks/useItemsEditor';
 import { TaskForm } from './TaskForm';
 import { ItemsEditor } from './ItemsEditor';
 import { ItemModal } from './ItemModal';
-import { useClients } from '@/store/TasksProvider';
+import { useClients, useServiceLevels } from '@/store/TasksProvider';
 
 interface Props {
   open: boolean;
@@ -33,6 +33,7 @@ interface Props {
 
 export function NewConsignmentCard({ open, onClose, onCreate }: Props) {
   const clientNames = useClients().map((c) => c.name);
+  const serviceLevelOptions = useServiceLevels().map((s) => ({ value: s.id, label: s.name }));
   const form = useForm<TaskFormValues>({ resolver: zodResolver(taskFormSchema), defaultValues: { ...EMPTY_TASK_FORM, ...defaultWindows() } });
   const items = useItemsEditor([]);
 
@@ -98,6 +99,7 @@ export function NewConsignmentCard({ open, onClose, onCreate }: Props) {
       <TaskForm
         form={form}
         clientOptions={clientNames}
+        serviceLevelOptions={serviceLevelOptions}
         itemsSlot={
           /* "cubic" is gone — items carry weight and package type, not volume. */
           <Card

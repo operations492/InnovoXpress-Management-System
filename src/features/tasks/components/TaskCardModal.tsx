@@ -12,7 +12,6 @@ import { taskFormSchema } from '@/domain/schemas';
 import type { TaskFormValues } from '@/domain/schemas';
 import { defaultWindows, EMPTY_TASK_FORM } from '@/domain/schemas';
 import { taskToFormValues } from '@/domain/mutations';
-import { itemsGrandTotal } from '@/domain/derive';
 import { money } from '@/domain/format';
 import type { Task, TaskItem } from '@/domain/types';
 import { useToast } from '@/components/Toast';
@@ -71,7 +70,6 @@ export function TaskCardModal({ open, task, onClose, onSave, onChangeStatus, onD
 
   if (!task) return null;
 
-  const g = itemsGrandTotal(items.items);
   const submit = form.handleSubmit((values) => {
     onSave(task.id, values, items.items);
     onClose();
@@ -179,7 +177,6 @@ export function TaskCardModal({ open, task, onClose, onSave, onChangeStatus, onD
 
       {tab === 'invoice' && (
         <div>
-          <InvoiceRow label="Items Total" value={money(g.total)} />
           <InvoiceRow label="Shipping Fee" value={money(task.feeNum)} />
           <InvoiceRow label="Cash On Delivery (Due)" value={money(task.codNum)} />
           <InvoiceRow label="Amount Due" value={money(task.codNum)} strong />
