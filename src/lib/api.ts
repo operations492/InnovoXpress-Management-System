@@ -403,6 +403,10 @@ export interface MapPinDto {
   receiverLat: number | null;
   receiverLng: number | null;
   clientName: string;
+  senderName: string;
+  senderLine1: string;
+  senderProvince: string | null;
+  senderCity: string;
   receiverName: string;
   receiverLine1: string;
   receiverProvince: string | null;

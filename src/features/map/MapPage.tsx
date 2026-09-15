@@ -32,12 +32,14 @@ import {
   mapPinsFor,
   selectedPins,
   mapViewReducer,
+  plotAt,
   plottable,
   visiblePins,
+  type PlotEnd,
   type TaskTab,
 } from './state/mapView';
 import { groupByCoord, groupOf } from './pins/grouping';
-import { pinColour } from './pins/pinIcon';
+import { endGlyph, pinColour } from './pins/pinIcon';
 import { PinLayer } from './pins/PinLayer';
 import { MapSidebar } from './sidebar/MapSidebar';
 import { MapFilterBar } from './MapFilterBar';
@@ -46,6 +48,8 @@ import { TaskWidget } from './widget/TaskWidget';
 import { DriverWidget } from './widget/DriverWidget';
 
 const COLOUR_PREF_KEY = 'innovo.map.colourByDriver';
+const PLOT_END_PREF_KEY = 'innovo.map.plotEnd';
+const PLOT_ENDS: PlotEnd[] = ['delivery', 'pickup'];
 const TRAFFIC_PREF_KEY = 'innovo.map.traffic';
 const DRIVERS_PREF_KEY = 'innovo.map.drivers';
 const TASK_TAB_VALUES: TaskTab[] = ['unassigned', 'assigned', 'completed'];
@@ -69,6 +73,9 @@ export function MapPage() {
     selectedDriverId: params.get('driver'),
     // A preference, not a location — so localStorage, not the URL.
     colourByDriver: localStorage.getItem(COLOUR_PREF_KEY) === '1',
+    plotEnd: (localStorage.getItem(PLOT_END_PREF_KEY) === 'pickup'
+      ? 'pickup'
+      : 'delivery') as PlotEnd,
   }));
 
   useEffect(() => {
@@ -83,10 +90,23 @@ export function MapPage() {
     localStorage.setItem(COLOUR_PREF_KEY, state.colourByDriver ? '1' : '0');
   }, [state.colourByDriver]);
 
+  useEffect(() => {
+    localStorage.setItem(PLOT_END_PREF_KEY, state.plotEnd);
+  }, [state.plotEnd]);
+
   const pinsQuery = useMapPins();
   const driversQuery = useMapDrivers();
 
-  const pins = pinsQuery.data?.data;
+  const rawPins = pinsQuery.data?.data;
+  /**
+   * Re-plotted at the chosen end ONCE, here, before anything reads a coordinate.
+   * The map, the sidebar, the lasso and the widget anchor all derive from this
+   * array, so they cannot disagree about where a task is.
+   */
+  const pins = useMemo(
+    () => (rawPins ? plotAt(rawPins, state.plotEnd) : undefined),
+    [rawPins, state.plotEnd],
+  );
   const meta = pinsQuery.data?.meta;
   const drivers = driversQuery.data ?? [];
 
@@ -398,6 +418,7 @@ export function MapPage() {
           )}
           <PinLayer
             groups={groups}
+            plotEnd={state.plotEnd}
             colourMode={mode}
             colorIndexOf={colorIndexOf}
             openTaskId={state.openTaskId}
@@ -419,6 +440,7 @@ export function MapPage() {
             <PinWidgetLayer lat={openPin.lat} lng={openPin.lng} onClose={closeWidget}>
               <TaskWidget
                 pin={openPin}
+                plotEnd={state.plotEnd}
                 siblings={openGroup?.pins ?? [openPin]}
                 onClose={closeWidget}
                 onView={(id) => setViewId(id)}
@@ -468,7 +490,38 @@ export function MapPage() {
           />
         </div>
 
-        <div className="absolute top-3 right-3 z-[800] flex flex-col gap-2">
+        <div className="absolute top-3 right-3 z-[800] flex flex-col items-end gap-2">
+          {/* Which end of every job the pins sit on. The letter on each segment is
+              the letter the pins will carry, so the control doubles as the key. */}
+          <div
+            role="group"
+            aria-label="Plot pins at"
+            className="flex overflow-hidden rounded-lg border bg-card shadow-sm"
+          >
+            {PLOT_ENDS.map((end) => {
+              const active = state.plotEnd === end;
+              return (
+                <button
+                  key={end}
+                  type="button"
+                  aria-pressed={active}
+                  title={
+                    end === 'pickup'
+                      ? 'Plot every job at its pickup address'
+                      : 'Plot every job at its drop-off address'
+                  }
+                  onClick={() => dispatch({ type: 'SET_PLOT_END', end })}
+                  className={`ix-reset-btn flex items-center gap-1.5 px-2 py-1.5 text-xs transition-colors ${
+                    active ? 'bg-foreground text-white' : 'text-foreground hover:bg-muted'
+                  }`}
+                >
+                  <span className="font-mono text-[10px] font-semibold">{endGlyph(end)}</span>
+                  {end === 'pickup' ? 'Pickup' : 'Drop-off'}
+                </button>
+              );
+            })}
+          </div>
+
           <IconButton
             title="Fit to tasks"
             aria-label="Fit to tasks"

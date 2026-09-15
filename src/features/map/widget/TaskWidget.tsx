@@ -1,10 +1,14 @@
+import { useMap } from 'react-leaflet';
 import { Avatar, Badge, Button, Icon, IconButton, StatusChip } from '@/ui';
 import type { TaskStatus } from '@/domain/status';
 import { isEditable } from '@/domain/status';
 import type { MapPinDto } from '@/lib/api';
+import { endAddress, endCoords, otherEnd, type PlotEnd } from '../state/mapView';
 
 interface TaskWidgetProps {
   pin: MapPinDto;
+  /** The end the pin sits on: that row is emphasised, the other gets "show on map". */
+  plotEnd: PlotEnd;
   /** Other orders at the same coordinate, so a stack is not invisible. */
   siblings: MapPinDto[];
   onClose: () => void;
@@ -29,6 +33,50 @@ function timeWindow(pickupAfter: string | null, deliverBefore: string | null): s
   return 'No time window';
 }
 
+function addressLine(a: { line1: string; city: string; province: string | null }): string {
+  return `${a.line1}, ${a.city}${a.province ? `, ${a.province}` : ''}`;
+}
+
+interface EndRowProps {
+  letter: 'P' | 'D';
+  label: 'Pickup' | 'Drop-off';
+  /** This is the end the pin sits on: filled chip, emphasised text. */
+  plotted: boolean;
+  text: string;
+  /** Only for the other end, and only when it has a coordinate to go to. */
+  onLocate?: () => void;
+}
+
+/**
+ * One end of the job. The chip mirrors the map — filled for the plotted end,
+ * hollow for the other — so the widget reads the same way the pins do.
+ */
+function EndRow({ letter, label, plotted, text, onLocate }: EndRowProps) {
+  return (
+    <div className="flex items-start gap-2">
+      <span
+        aria-label={label}
+        className={`mt-0.5 flex size-4 flex-none items-center justify-center rounded-full border border-foreground font-mono text-[10px] leading-none font-semibold ${
+          plotted ? 'bg-foreground text-white' : 'text-foreground'
+        }`}
+      >
+        {letter}
+      </span>
+      <span className={`min-w-0 flex-1 text-foreground ${plotted ? 'font-medium' : ''}`}>{text}</span>
+      {onLocate && (
+        <IconButton
+          size="sm"
+          title={`Show ${label.toLowerCase()} on map`}
+          aria-label={`Show ${label.toLowerCase()} on map`}
+          onClick={onLocate}
+        >
+          <Icon name="navigation" size={12} />
+        </IconButton>
+      )}
+    </div>
+  );
+}
+
 /**
  * The pin's details card.
  *
@@ -37,6 +85,7 @@ function timeWindow(pickupAfter: string | null, deliverBefore: string | null): s
  */
 export function TaskWidget({
   pin,
+  plotEnd,
   siblings,
   onClose,
   onView,
@@ -48,6 +97,13 @@ export function TaskWidget({
   // The API refuses edits once a run has started, so the button is hidden
   // rather than offered and then rejected with a 409.
   const editable = isEditable(pin.status as TaskStatus);
+
+  // Portalled to document.body, but React context crosses portals, so the map
+  // this widget belongs to is still in reach for "show the other end".
+  const map = useMap();
+  const far = otherEnd(plotEnd);
+  const farAt = endCoords(pin, far);
+  const locate = farAt ? () => map.panTo(farAt) : undefined;
 
   return (
     <div className="rounded-xl border bg-card p-3 shadow-[var(--elevation-1)]">
@@ -79,14 +135,20 @@ export function TaskWidget({
               identical words meaning different things reads as a duplicate. */}
           <span className="text-foreground">{pin.driver?.name ?? 'No driver yet'}</span>
         </div>
-        <div className="flex items-start gap-2">
-          <Icon name="pin" size={14} />
-          <span className="text-foreground">
-            {pin.receiverLine1}
-            , {pin.receiverCity}
-            {pin.receiverProvince ? `, ${pin.receiverProvince}` : ''}
-          </span>
-        </div>
+        <EndRow
+          letter="P"
+          label="Pickup"
+          plotted={plotEnd === 'pickup'}
+          text={addressLine(endAddress(pin, 'pickup'))}
+          onLocate={far === 'pickup' ? locate : undefined}
+        />
+        <EndRow
+          letter="D"
+          label="Drop-off"
+          plotted={plotEnd === 'delivery'}
+          text={addressLine(endAddress(pin, 'delivery'))}
+          onLocate={far === 'delivery' ? locate : undefined}
+        />
         <div className="flex items-start gap-2">
           <Icon name="package" size={14} />
           <span className="text-foreground">Quantity: {pin.totalQty}</span>

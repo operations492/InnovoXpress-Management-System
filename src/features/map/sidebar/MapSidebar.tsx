@@ -132,6 +132,7 @@ export function MapSidebar({
               <TaskRow
                 key={pin.id}
                 pin={pin}
+                plotEnd={state.plotEnd}
                 borderColour={borderColourOf(pin)}
                 selected={pin.id === state.openTaskId}
                 onOpen={onOpenTask}
@@ -178,6 +179,7 @@ export function MapSidebar({
                   // Only the open driver's tasks are computed, so a long roster
                   // costs nothing.
                   tasks={expanded ? tasksForDriver(driver.id) : []}
+                  plotEnd={state.plotEnd}
                   showSwatch={state.colourByDriver}
                   borderColourOf={borderColourOf}
                   editableOf={editableOf}

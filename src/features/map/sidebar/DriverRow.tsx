@@ -1,5 +1,6 @@
 import { Avatar, Icon } from '@/ui';
 import type { MapDriverDto, MapPinDto } from '@/lib/api';
+import type { PlotEnd } from '../state/mapView';
 import { driverColour } from '../pins/pinIcon';
 import { TaskRow } from './TaskRow';
 
@@ -8,6 +9,8 @@ interface DriverRowProps {
   expanded: boolean;
   /** Their tasks, already filtered. Only rendered while expanded. */
   tasks: MapPinDto[];
+  /** Which end the map is plotting, so each row names the same address as its pin. */
+  plotEnd: PlotEnd;
   /** Swatches only make sense while the colour switch is on. */
   showSwatch: boolean;
   /** Status hue or the driver's, matching the map. */
@@ -31,6 +34,7 @@ export function DriverRow({
   driver,
   expanded,
   tasks,
+  plotEnd,
   showSwatch,
   borderColourOf,
   editableOf,
@@ -85,6 +89,7 @@ export function DriverRow({
               <TaskRow
                 key={pin.id}
                 pin={pin}
+                plotEnd={plotEnd}
                 borderColour={borderColourOf(pin)}
                 selected={pin.id === openTaskId}
                 onOpen={onOpenTask}

@@ -7,8 +7,12 @@ import {
   driverFilter,
   frameIntent,
   initialMapView,
+  endAddress,
+  endCoords,
   mapPinsFor,
   mapViewReducer,
+  otherEnd,
+  plotAt,
   selectedPins,
   visiblePins,
   type MapViewAction,
@@ -34,6 +38,10 @@ const pin = (over: Partial<MapPinDto> = {}): MapPinDto => ({
   receiverLat: 31.47,
   receiverLng: 74.41,
   clientName: 'Daraz',
+  senderName: 'Daraz Hub',
+  senderLine1: '1 Warehouse Way',
+  senderProvince: 'ON',
+  senderCity: 'Mississauga',
   receiverName: 'Sana Yousaf',
   receiverLine1: '214 Bloor Street West',
   receiverProvince: 'ON',
@@ -275,6 +283,49 @@ describe('filtering', () => {
     };
 
     expect(mapPinsFor(pins, withDriverSelected).map((p) => p.id)).toEqual(['a1', 'c1']);
+  });
+});
+
+describe('which end is plotted', () => {
+  it('defaults to the drop-off end and leaves the server-plotted array untouched', () => {
+    const pins = [pin()];
+    expect(initialMapView.plotEnd).toBe('delivery');
+    expect(plotAt(pins, 'delivery')).toBe(pins);
+  });
+
+  it('re-plots every pin at its pickup coordinate', () => {
+    const [p] = plotAt([pin()], 'pickup');
+    expect([p.lat, p.lng]).toEqual([31.52, 74.35]);
+  });
+
+  it('makes a pin with no pickup coordinate unplottable rather than guessing', () => {
+    const [p] = plotAt([pin({ senderLat: null, senderLng: null })], 'pickup');
+    expect(p.lat).toBeNull();
+    expect(p.lng).toBeNull();
+  });
+
+  it('names the other end, its coordinate and its address', () => {
+    expect(otherEnd('delivery')).toBe('pickup');
+    expect(otherEnd('pickup')).toBe('delivery');
+    expect(endCoords(pin(), 'pickup')).toEqual([31.52, 74.35]);
+    expect(endCoords(pin(), 'delivery')).toEqual([31.47, 74.41]);
+    expect(endCoords(pin({ senderLat: null }), 'pickup')).toBeNull();
+    expect(endAddress(pin(), 'pickup').line1).toBe('1 Warehouse Way');
+    expect(endAddress(pin(), 'delivery').line1).toBe('214 Bloor Street West');
+  });
+
+  it('switching the end moves the pins and nothing else', () => {
+    const before: MapViewState = {
+      ...initialMapView,
+      openTaskId: 'p1',
+      selectedTaskIds: ['p1', 'p2'],
+    };
+    const after = mapViewReducer(before, { type: 'SET_PLOT_END', end: 'pickup' });
+    expect(after.plotEnd).toBe('pickup');
+    expect(after.openTaskId).toBe('p1');
+    expect(after.selectedTaskIds).toEqual(['p1', 'p2']);
+    // Same end again is a no-op — the reducer returns the same reference.
+    expect(mapViewReducer(after, { type: 'SET_PLOT_END', end: 'pickup' })).toBe(after);
   });
 });
 

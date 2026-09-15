@@ -3,7 +3,7 @@ import { statusColorVar } from '@/domain/status';
 import type { TaskStatus } from '@/domain/status';
 import { ZONE_COLORS } from '@/domain/serviceZone';
 import type { MapPinDto } from '@/lib/api';
-import type { ColourMode } from '../state/mapView';
+import type { ColourMode, PlotEnd } from '../state/mapView';
 
 /*
  * Pin appearance.
@@ -47,9 +47,46 @@ export function pinColour(
   return statusColorVar(pin.status as TaskStatus);
 }
 
-/** Delivery and pickup are distinguishable without colour, for greyscale and colour-blindness. */
-export function pinGlyph(taskType: string): string {
-  return taskType === 'PICKUP' ? 'P' : 'D';
+/**
+ * The letter names the END of the job the marker sits on — D at the drop-off
+ * address, P at the collection address — not the job type. The type filter and
+ * the widget badge already say what kind of job it is; on the map the useful
+ * question is "which end am I looking at?", and that reading survives switching
+ * the plotted end and drawing the other end as a ring. Legible without colour,
+ * for greyscale and colour-blindness.
+ */
+export function endGlyph(end: PlotEnd): string {
+  return end === 'pickup' ? 'P' : 'D';
+}
+
+const ringCache = new Map<string, L.DivIcon>();
+
+/**
+ * The OTHER end of the open job: a hollow ring in the pin's colour, so the two
+ * ends read as one job without a second filled pin competing for attention.
+ * A centre-anchored circle rather than a teardrop — it marks a point instead of
+ * pointing at one, which is what tells it apart from a pin at a glance.
+ */
+export function endRingIcon(colour: string, glyph: string): L.DivIcon {
+  const key = `${colour}|${glyph}`;
+  const hit = ringCache.get(key);
+  if (hit) return hit;
+
+  const size = 20;
+  const icon = L.divIcon({
+    className: '',
+    html: `<div style="
+      width:${size}px;height:${size}px;border-radius:50%;
+      background:#fff;border:2px solid ${colour};
+      box-shadow:0 2px 6px rgba(26,26,46,.35);
+      display:flex;align-items:center;justify-content:center;
+      color:${colour};font:600 10px system-ui;">${glyph}</div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
+
+  ringCache.set(key, icon);
+  return icon;
 }
 
 export interface PinLook {

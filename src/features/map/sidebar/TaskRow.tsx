@@ -1,8 +1,11 @@
 import { Avatar, Icon, IconButton } from '@/ui';
 import type { MapPinDto } from '@/lib/api';
+import { endAddress, type PlotEnd } from '../state/mapView';
 
 interface TaskRowProps {
   pin: MapPinDto;
+  /** The row names the end the map is plotting, so list and pin never disagree. */
+  plotEnd: PlotEnd;
   /** Status hue, or the driver's, depending on the colour mode. */
   borderColour: string;
   selected: boolean;
@@ -36,6 +39,7 @@ function timeLabel(pin: MapPinDto): string {
  */
 export function TaskRow({
   pin,
+  plotEnd,
   borderColour,
   selected,
   onOpen,
@@ -45,6 +49,7 @@ export function TaskRow({
   editable,
 }: TaskRowProps) {
   const unplottable = pin.lat === null;
+  const at = endAddress(pin, plotEnd);
 
   return (
     <div
@@ -62,7 +67,7 @@ export function TaskRow({
           {pin.clientName}
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="truncate text-sm font-medium text-foreground">{pin.receiverLine1}</span>
+          <span className="truncate text-sm font-medium text-foreground">{at.line1}</span>
           {unplottable && (
             // These rows are real work with a broken address, so they stay in the
             // list rather than being hidden — but they cannot be plotted.
@@ -72,10 +77,10 @@ export function TaskRow({
           )}
         </span>
         <span className="block truncate text-xs text-muted-foreground">
-          {pin.receiverCity}
-          {pin.receiverProvince ? `, ${pin.receiverProvince}` : ''}
+          {at.city}
+          {at.province ? `, ${at.province}` : ''}
         </span>
-        <span className="block truncate text-xs text-muted-foreground">{pin.receiverName}</span>
+        <span className="block truncate text-xs text-muted-foreground">{at.name}</span>
       </button>
 
       <span className="flex flex-none flex-col items-end gap-1">

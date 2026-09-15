@@ -13,6 +13,14 @@ import type { MapDriverDto, MapPinDto } from '@/lib/api';
 export type MainTab = 'tasks' | 'drivers';
 export type TaskTab = 'unassigned' | 'assigned' | 'completed';
 export type ColourMode = 'status' | 'driver';
+/**
+ * Which end of every job the pin sits on.
+ *
+ * A job has two addresses. The server plots the drop-off; "pickup" re-plots
+ * every pin at its collection address, which is where a morning run is planned
+ * from. A view choice, not a filter — the same tasks, a different place.
+ */
+export type PlotEnd = 'delivery' | 'pickup';
 
 /**
  * Which statuses each sidebar tab shows.
@@ -51,6 +59,8 @@ export interface MapViewState {
   selectedDriverId: string | null;
   /** The "different colours per team member" switch. On its own it does nothing. */
   colourByDriver: boolean;
+  /** Which end of each job the pins are plotted at. See `PlotEnd`. */
+  plotEnd: PlotEnd;
   query: string;
   /** Which pin's widget is open. Only ever one. */
   openTaskId: string | null;
@@ -87,6 +97,7 @@ export const initialMapView: MapViewState = {
   taskTab: 'unassigned',
   selectedDriverId: null,
   colourByDriver: false,
+  plotEnd: 'delivery',
   query: '',
   openTaskId: null,
   selectedTaskIds: [],
@@ -106,6 +117,7 @@ export type MapViewAction =
   | { type: 'SELECT_DRIVER'; driverId: string }
   | { type: 'CLEAR_DRIVER' }
   | { type: 'SET_COLOUR_BY_DRIVER'; value: boolean }
+  | { type: 'SET_PLOT_END'; end: PlotEnd }
   | { type: 'SET_QUERY'; query: string }
   | { type: 'OPEN_TASK'; taskId: string | null }
   | { type: 'SELECT_MANY'; taskIds: string[]; additive: boolean }
@@ -156,6 +168,11 @@ export function mapViewReducer(state: MapViewState, action: MapViewAction): MapV
       return state.colourByDriver === action.value
         ? state
         : { ...state, colourByDriver: action.value };
+
+    case 'SET_PLOT_END':
+      // Moves the pins, nothing else: the selection, the tab and the open widget
+      // all refer to tasks, and the tasks have not changed.
+      return state.plotEnd === action.end ? state : { ...state, plotEnd: action.end };
 
     case 'SET_QUERY':
       return { ...state, query: action.query };
@@ -366,6 +383,47 @@ export function mapPinsFor(pins: MapPinDto[] | undefined, state: MapViewState): 
   if (driverFilter(state)) return visiblePins(pins, state, { ignoreTaskTab: true });
   if (state.tab === 'drivers') return visiblePins(pins, { ...state, taskTab: 'assigned' });
   return visiblePins(pins, state);
+}
+
+export function otherEnd(end: PlotEnd): PlotEnd {
+  return end === 'pickup' ? 'delivery' : 'pickup';
+}
+
+/** The coordinate of one end of a job, or null when that end was never geocoded. */
+export function endCoords(pin: MapPinDto, end: PlotEnd): [number, number] | null {
+  const lat = end === 'pickup' ? pin.senderLat : pin.receiverLat;
+  const lng = end === 'pickup' ? pin.senderLng : pin.receiverLng;
+  return lat !== null && lng !== null && Number.isFinite(lat) && Number.isFinite(lng)
+    ? [lat, lng]
+    : null;
+}
+
+/** The address text of one end of a job, for rows and the widget. */
+export function endAddress(pin: MapPinDto, end: PlotEnd) {
+  return end === 'pickup'
+    ? { name: pin.senderName, line1: pin.senderLine1, city: pin.senderCity, province: pin.senderProvince }
+    : {
+        name: pin.receiverName,
+        line1: pin.receiverLine1,
+        city: pin.receiverCity,
+        province: pin.receiverProvince,
+      };
+}
+
+/**
+ * Re-plot every pin at the chosen end.
+ *
+ * Applied ONCE, upstream of everything else, so the map, the sidebar, the
+ * lasso and the widget anchor all read the same `lat`/`lng` and cannot
+ * disagree about where a task is. The server's `lat`/`lng` is already the
+ * drop-off end, so that case returns the array untouched.
+ */
+export function plotAt(pins: MapPinDto[], end: PlotEnd): MapPinDto[] {
+  if (end === 'delivery') return pins;
+  return pins.map((p) => {
+    const at = endCoords(p, 'pickup');
+    return { ...p, lat: at ? at[0] : null, lng: at ? at[1] : null };
+  });
 }
 
 /** Only pins that can actually be drawn. `lat`/`lng` is already validated server-side. */
