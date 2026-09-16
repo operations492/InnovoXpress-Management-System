@@ -146,7 +146,12 @@ same constant and rounding as the backend so the figure shown before save matche
 Blank figures are `null`, never 0, and render as a dash. There is no package type, line total, product
 id or order id anywhere any more.
 
-Finance pages are out of scope and still on in-memory fixtures.
+Finance pages are out of scope and still on in-memory fixtures — **except Service Levels**, which is
+on `/api/service-levels` through `ServiceLevelsProvider` (TanStack Query, same shape as the old
+in-memory store so the rate plan pages did not change). A level is a name, `active` and a
+`usageCount`; Delete is offered only at zero usage, otherwise the panel says to retire it, which is
+what the API's 409 says too. Every write also invalidates the reference query so the consignment
+form's dropdown never offers a level that was just retired.
 
 ---
 

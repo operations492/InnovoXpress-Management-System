@@ -153,6 +153,31 @@ export interface ItemTotalsDto {
   totalCubic: number;
 }
 
+/** A row in service_levels, exactly as /api/service-levels returns it. */
+export interface ServiceLevelDto {
+  id: string;
+  name: string;
+  active: boolean;
+  sortOrder: number;
+  /** Orders referencing it. Zero means Delete is allowed; otherwise retire it. */
+  usageCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateServiceLevelPayload {
+  name: string;
+  /** Position in the dropdown; omitted means "after everything else". */
+  sortOrder?: number;
+}
+
+/** Rename, reorder, or retire/restore in one call. At least one key required. */
+export interface UpdateServiceLevelPayload {
+  name?: string;
+  sortOrder?: number;
+  active?: boolean;
+}
+
 export interface TimelineDto {
   id: string;
   fromStatus: string | null;
@@ -629,6 +654,21 @@ export const api = {
       priorities: Array<{ value: string; label: string }>;
       taskTypes: Array<{ value: string; label: string }>;
     }>('/api/reference'),
+
+  /* ------------------------------------------------------- service levels */
+  // Listing is operator+; create, update and delete are admin-only server-side.
+  // Delete answers 204 with no body, and a 409 when any order still uses the level.
+
+  listServiceLevels: (params: { includeInactive?: boolean } = {}) =>
+    get<ServiceLevelDto[]>(`/api/service-levels${params.includeInactive ? '?includeInactive=true' : ''}`),
+
+  createServiceLevel: (payload: CreateServiceLevelPayload) =>
+    post<ServiceLevelDto>('/api/service-levels', payload),
+
+  updateServiceLevel: (id: string, payload: UpdateServiceLevelPayload) =>
+    patch<ServiceLevelDto>(`/api/service-levels/${id}`, payload),
+
+  deleteServiceLevel: (id: string) => del<void>(`/api/service-levels/${id}`),
 
   listConsignments: (params: Record<string, string | number | undefined> = {}) => {
     const qs = new URLSearchParams();

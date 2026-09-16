@@ -1,86 +1,78 @@
 /**
  * Finance → Service Levels — the consignment service tiers (5 Ton Truck, Expedite, …).
- * Master-detail: a lean list on the left (Service name · Short name · Parent) and a
- * sectioned detail form on the right. New levels are created name-only (a prompt) then
- * configured on the panel; update (edit + save, incl. toggles) and delete. In-memory
- * store, no backend. Consignments / rate cards can reference this list later.
+ *
+ * Backed by /api/service-levels. The list shows every level, retired ones
+ * included, because an operator has to be able to find one to bring it back.
+ * A row is a name, whether it is offered, and how many orders use it — that is
+ * the whole record now.
  */
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { Button, Icon, Input, Modal } from '@/ui';
-import type { SelectOption } from '@/ui';
 import { cn } from '@/lib/utils';
-import { useToast } from '@/components/Toast';
-import { nowLabel } from '@/domain/format';
-import type { ServiceLevelInput } from '@/domain/serviceLevel';
+import type { ServiceLevel, ServiceLevelPatch } from '@/domain/serviceLevel';
 import { useServiceLevelsStore } from '@/store/ServiceLevelsProvider';
+import { useServiceLevelActions } from './hooks/useServiceLevelActions';
 import { ServiceLevelDetailPanel } from './components/ServiceLevelDetailPanel';
 
-const CURRENT_USER = 'Operations';
-const GRID = 'grid grid-cols-[1fr_110px_150px] gap-2';
-const Dash = () => <span className="text-muted-foreground">—</span>;
+const GRID = 'grid grid-cols-[1fr_120px_110px] gap-2';
+
+/** Dot + label, the same construction as a status chip, so it survives greyscale. */
+function ActiveMark({ active }: { active: boolean }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 text-sm text-muted-foreground">
+      <span
+        aria-hidden
+        className="size-1.5 rounded-full"
+        style={{ background: active ? 'var(--status-success)' : 'var(--status-neutral)' }}
+      />
+      {active ? 'Active' : 'Retired'}
+    </span>
+  );
+}
 
 export function ServiceLevelsPage() {
   const store = useServiceLevelsStore();
-  const { flash } = useToast();
+  const actions = useServiceLevelActions();
 
-  const [selectedId, setSelectedId] = useState<string | null>(store.levels[0]?.id ?? null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [namingNew, setNamingNew] = useState(false);
   const [newName, setNewName] = useState('');
+  const [busy, setBusy] = useState(false);
 
-  const selected = store.levels.find((l) => l.id === selectedId) ?? null;
+  const levels = store.levels;
+  const selected: ServiceLevel | null = levels.find((l) => l.id === selectedId) ?? null;
   const mode = selected ? 'edit' : 'empty';
-  const nameById = useMemo(() => new Map(store.levels.map((l) => [l.id, l.name])), [store.levels]);
-
-  const parentOptions = useMemo<SelectOption[]>(
-    () => [
-      { value: '', label: '— None —' },
-      ...store.levels.filter((l) => l.id !== selectedId).map((l) => ({ value: l.id, label: l.name })),
-    ],
-    [store.levels, selectedId],
-  );
+  const activeCount = levels.filter((l) => l.active).length;
 
   const openNew = () => {
     setNewName('');
     setNamingNew(true);
   };
-  const createLevel = () => {
+
+  const createLevel = async () => {
     const name = newName.trim();
-    if (!name) return;
-    const created = store.add({
-      name,
-      shortName: '',
-      aka: '',
-      maxQty: null,
-      maxItemWeight: null,
-      dangerousGoodsExcluded: false,
-      onlyPriceIfExactMatch: false,
-      hideFromCustomer: false,
-      isDefault: false,
-      mobileColorPreload: 'Empty',
-      mobileColorDelivery: 'Empty',
-      portalColor: 'Empty',
-      parentId: null,
-      priceDisplayInfo: '',
-      displayTextAfterCreate: '',
-      memo: '',
-      createdBy: CURRENT_USER,
-      createdAt: nowLabel(),
-    });
-    setSelectedId(created.id);
+    if (!name || busy) return;
+    setBusy(true);
+    const created = await actions.create({ name });
+    setBusy(false);
+    if (!created) return;
     setNamingNew(false);
-    flash('Service level created — set its details');
+    setSelectedId(created.id);
   };
 
-  const submit = (patch: Partial<ServiceLevelInput>) => {
-    if (!selectedId) return;
-    store.update(selectedId, patch);
-    flash('Service level updated');
+  const submit = async (patch: ServiceLevelPatch) => {
+    if (!selected || busy) return;
+    setBusy(true);
+    await actions.save(selected, patch);
+    setBusy(false);
   };
-  const remove = () => {
-    if (!selectedId) return;
-    store.remove(selectedId);
-    setSelectedId(null);
-    flash('Service level deleted');
+
+  const remove = async () => {
+    if (!selected || busy) return;
+    setBusy(true);
+    const deleted = await actions.remove(selected);
+    setBusy(false);
+    if (deleted) setSelectedId(null);
   };
 
   return (
@@ -89,7 +81,7 @@ export function ServiceLevelsPage() {
       <div className="flex items-baseline gap-3 px-4 pt-4 pb-2">
         <h1 className="font-display text-[22px] font-bold tracking-tight text-foreground">Service Levels</h1>
         <span className="font-mono text-[11px] text-muted-foreground">
-          <b className="font-semibold text-foreground">{store.levels.length}</b> levels · used across consignments &amp; rates
+          <b className="font-semibold text-foreground">{activeCount}</b> active · {levels.length} total
         </span>
       </div>
 
@@ -108,16 +100,21 @@ export function ServiceLevelsPage() {
           <div className="overflow-hidden rounded-xl border bg-card">
             <div className={cn(GRID, 'border-b bg-muted px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground')}>
               <span>Service name</span>
-              <span>Short name</span>
-              <span>Parent</span>
+              <span>Status</span>
+              <span className="text-right">Orders</span>
             </div>
 
-            {store.levels.length === 0 ? (
+            {store.error ? (
+              <p role="alert" className="px-4 py-10 text-center text-sm text-danger">
+                Could not load service levels: {store.error.message}
+              </p>
+            ) : store.loading ? (
+              <p className="px-4 py-10 text-center text-sm text-muted-foreground">Loading…</p>
+            ) : levels.length === 0 ? (
               <p className="px-4 py-10 text-center text-sm text-muted-foreground">No service levels yet.</p>
             ) : (
-              store.levels.map((l) => {
+              levels.map((l) => {
                 const isSel = l.id === selectedId;
-                const parentName = l.parentId ? (nameById.get(l.parentId) ?? '') : '';
                 return (
                   <div
                     key={l.id}
@@ -135,20 +132,17 @@ export function ServiceLevelsPage() {
                     />
                     <span
                       className={cn(
-                        'pointer-events-none z-10 flex items-center gap-1.5 truncate text-sm font-medium',
-                        isSel ? 'text-primary' : 'text-foreground',
+                        'pointer-events-none z-10 truncate text-sm font-medium',
+                        isSel ? 'text-primary' : l.active ? 'text-foreground' : 'text-muted-foreground',
                       )}
                     >
                       {l.name}
-                      {l.isDefault && (
-                        <span className="rounded-sm bg-primary/10 px-1 font-mono text-[9px] uppercase tracking-wide text-primary">Def</span>
-                      )}
                     </span>
-                    <span className="pointer-events-none z-10 truncate text-sm text-muted-foreground">
-                      {l.shortName || <Dash />}
+                    <span className="pointer-events-none z-10">
+                      <ActiveMark active={l.active} />
                     </span>
-                    <span className="pointer-events-none z-10 truncate text-sm text-muted-foreground">
-                      {parentName || <Dash />}
+                    <span className="tnum pointer-events-none z-10 text-right font-mono text-sm text-muted-foreground">
+                      {l.usageCount}
                     </span>
                   </div>
                 );
@@ -164,7 +158,7 @@ export function ServiceLevelsPage() {
               key={selectedId ?? 'empty'}
               level={selected}
               mode={mode}
-              parentOptions={parentOptions}
+              busy={busy}
               onSubmit={submit}
               onDelete={remove}
             />
@@ -172,7 +166,7 @@ export function ServiceLevelsPage() {
         </aside>
       </div>
 
-      {/* New service level — name only; configured on the panel afterward */}
+      {/* New service level — a name is the whole record; it is offered at once */}
       <Modal
         open={namingNew}
         onClose={() => setNamingNew(false)}
@@ -183,7 +177,7 @@ export function ServiceLevelsPage() {
             <Button variant="utility" size="sm" onClick={() => setNamingNew(false)}>
               Cancel
             </Button>
-            <Button variant="primary" size="sm" onClick={createLevel} disabled={!newName.trim()}>
+            <Button variant="primary" size="sm" onClick={createLevel} disabled={!newName.trim() || busy}>
               Create
             </Button>
           </>
@@ -199,11 +193,11 @@ export function ServiceLevelsPage() {
             value={newName}
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && newName.trim()) createLevel();
+              if (e.key === 'Enter' && newName.trim()) void createLevel();
             }}
           />
         </label>
-        <p className="mt-2 text-xs text-muted-foreground">You'll set limits, colors and options after it's created.</p>
+        <p className="mt-2 text-xs text-muted-foreground">It appears in the consignment form's Service level dropdown straight away.</p>
       </Modal>
     </div>
   );

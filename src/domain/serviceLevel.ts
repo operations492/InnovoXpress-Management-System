@@ -1,39 +1,23 @@
 /**
- * Consignment Service Level — the transport tiers a consignment can be booked at
- * (5 Ton Truck, Expedite, Standard, …). A reusable lookup referenced by consignments
- * and rate structures. Client-side only for now; an in-memory store owns the list.
- * Modeled on the reference "Consignment Service Levels" screen.
+ * Consignment Service Level — the transport tiers an order can be booked at
+ * (5 Ton Truck, Expedite, Standard, …). Lives in the `service_levels` table and
+ * is managed at /api/service-levels; this is the API's row shape, unchanged.
+ *
+ * Deliberately small: a name, whether it is still offered, and its dropdown
+ * position. Everything the reference screen had beyond that — short names,
+ * limits, colours, hierarchy, memos — was removed because nothing read it.
  */
-export interface ServiceLevel {
-  id: string;
-  name: string;
-  shortName: string;
-  /** Alternate names ("also known as"). */
-  aka: string;
-  /** Limits; null = unset. */
-  maxQty: number | null;
-  maxItemWeight: number | null;
-  /** Toggles. */
-  dangerousGoodsExcluded: boolean;
-  onlyPriceIfExactMatch: boolean;
-  hideFromCustomer: boolean;
-  isDefault: boolean;
-  /** Display colors (a named swatch, 'Empty' = none). */
-  mobileColorPreload: string;
-  mobileColorDelivery: string;
-  portalColor: string;
-  /** Parent level (self-reference); null = top-level. */
-  parentId: string | null;
-  priceDisplayInfo: string;
-  displayTextAfterCreate: string;
-  memo: string;
-  /** Audit (stubbed until real auth). */
-  createdBy: string;
-  createdAt: string;
+import type { CreateServiceLevelPayload, ServiceLevelDto, UpdateServiceLevelPayload } from '@/lib/api';
+
+export type ServiceLevel = ServiceLevelDto;
+export type ServiceLevelInput = CreateServiceLevelPayload;
+export type ServiceLevelPatch = UpdateServiceLevelPayload;
+
+/**
+ * Delete is only offered when no order references the level. The API refuses
+ * anyway with a 409 that says to retire it instead; checking here lets the
+ * screen say so before anyone clicks.
+ */
+export function canDelete(level: ServiceLevel): boolean {
+  return level.usageCount === 0;
 }
-
-/** The create/update payload (everything except the surrogate id). */
-export type ServiceLevelInput = Omit<ServiceLevel, 'id'>;
-
-/** Named color swatches for the mobile/portal color selects ('Empty' = none). */
-export const SERVICE_LEVEL_COLORS = ['Empty', 'Red', 'Amber', 'Green', 'Blue', 'Violet', 'Cyan', 'Grey'];

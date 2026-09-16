@@ -1,77 +1,26 @@
 /**
- * Service Level detail panel (master-detail right side). Edits the selected level as a
- * single sectioned form — Identity, Limits, Visibility, Display, Hierarchy — then commits
- * via Save (toggles included). New levels are created name-only from the page, so this
- * panel handles empty/edit only. Labels are Iris-renamed from the reference screen. The
- * parent remounts it (via `key`) when the selection changes, so the draft inits from props.
+ * The edit side of Finance → Service Levels: a name, whether it is still
+ * offered, and how many orders reference it. Nothing else exists on the row.
+ *
+ * Save sends only what changed — the API refuses an empty patch — and Delete
+ * is hidden, not disabled, when the level is in use: a button that can never
+ * work is worse than a sentence saying why.
  */
 import { useState } from 'react';
 import type { ReactNode } from 'react';
-import { Button, Icon, Input, Select, Switch } from '@/ui';
-import type { SelectOption } from '@/ui';
-import type { ServiceLevel, ServiceLevelInput } from '@/domain/serviceLevel';
-import { SERVICE_LEVEL_COLORS } from '@/domain/serviceLevel';
+import { Button, ConfirmDialog, Icon, Input, Switch } from '@/ui';
+import type { ServiceLevel, ServiceLevelPatch } from '@/domain/serviceLevel';
+import { canDelete } from '@/domain/serviceLevel';
 
 type Mode = 'empty' | 'edit';
 
 interface ServiceLevelDetailPanelProps {
   level: ServiceLevel | null;
   mode: Mode;
-  /** Other levels (+ a None entry) for the Parent select. */
-  parentOptions: SelectOption[];
-  onSubmit: (patch: Partial<ServiceLevelInput>) => void;
+  /** A request is in flight; Save and Delete wait for it. */
+  busy?: boolean;
+  onSubmit: (patch: ServiceLevelPatch) => void;
   onDelete: () => void;
-}
-
-const numToStr = (n: number | null | undefined) => (n == null ? '' : String(n));
-
-const parseNum = (s: string): number | null => {
-  const t = s.trim();
-  if (!t) return null;
-  const n = Number(t.replace(/[^0-9.]/g, ''));
-  return Number.isFinite(n) ? n : null;
-};
-
-interface Draft {
-  name: string;
-  shortName: string;
-  aka: string;
-  maxQty: string;
-  maxItemWeight: string;
-  dangerousGoodsExcluded: boolean;
-  onlyPriceIfExactMatch: boolean;
-  hideFromCustomer: boolean;
-  isDefault: boolean;
-  mobileColorPreload: string;
-  mobileColorDelivery: string;
-  portalColor: string;
-  parentId: string;
-  priceDisplayInfo: string;
-  displayTextAfterCreate: string;
-  memo: string;
-}
-
-type BoolKey = 'dangerousGoodsExcluded' | 'onlyPriceIfExactMatch' | 'hideFromCustomer' | 'isDefault';
-
-function toDraft(level: ServiceLevel | null): Draft {
-  return {
-    name: level?.name ?? '',
-    shortName: level?.shortName ?? '',
-    aka: level?.aka ?? '',
-    maxQty: numToStr(level?.maxQty),
-    maxItemWeight: numToStr(level?.maxItemWeight),
-    dangerousGoodsExcluded: level?.dangerousGoodsExcluded ?? false,
-    onlyPriceIfExactMatch: level?.onlyPriceIfExactMatch ?? false,
-    hideFromCustomer: level?.hideFromCustomer ?? false,
-    isDefault: level?.isDefault ?? false,
-    mobileColorPreload: level?.mobileColorPreload ?? 'Empty',
-    mobileColorDelivery: level?.mobileColorDelivery ?? 'Empty',
-    portalColor: level?.portalColor ?? 'Empty',
-    parentId: level?.parentId ?? '',
-    priceDisplayInfo: level?.priceDisplayInfo ?? '',
-    displayTextAfterCreate: level?.displayTextAfterCreate ?? '',
-    memo: level?.memo ?? '',
-  };
 }
 
 function Eyebrow({ children }: { children: ReactNode }) {
@@ -96,8 +45,11 @@ function ToggleRow({ label, checked, onChange }: { label: string; checked: boole
   );
 }
 
-export function ServiceLevelDetailPanel({ level, mode, parentOptions, onSubmit, onDelete }: ServiceLevelDetailPanelProps) {
-  const [draft, setDraft] = useState<Draft>(() => toDraft(level));
+export function ServiceLevelDetailPanel({ level, mode, busy, onSubmit, onDelete }: ServiceLevelDetailPanelProps) {
+  // The page remounts this panel on every selection change (`key`), so seeding
+  // state from props once is enough.
+  const [name, setName] = useState(level?.name ?? '');
+  const [active, setActive] = useState(level?.active ?? true);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   if (mode === 'empty' || !level) {
@@ -111,32 +63,14 @@ export function ServiceLevelDetailPanel({ level, mode, parentOptions, onSubmit, 
     );
   }
 
-  const setStr = (k: Exclude<keyof Draft, BoolKey>, v: string) => setDraft((d) => ({ ...d, [k]: v }) as Draft);
-  const setBool = (k: BoolKey, v: boolean) => setDraft((d) => ({ ...d, [k]: v }) as Draft);
-
-  const valid = draft.name.trim().length > 0;
-
-  const save = () => {
-    if (!valid) return;
-    onSubmit({
-      name: draft.name.trim(),
-      shortName: draft.shortName.trim(),
-      aka: draft.aka.trim(),
-      maxQty: parseNum(draft.maxQty),
-      maxItemWeight: parseNum(draft.maxItemWeight),
-      dangerousGoodsExcluded: draft.dangerousGoodsExcluded,
-      onlyPriceIfExactMatch: draft.onlyPriceIfExactMatch,
-      hideFromCustomer: draft.hideFromCustomer,
-      isDefault: draft.isDefault,
-      mobileColorPreload: draft.mobileColorPreload,
-      mobileColorDelivery: draft.mobileColorDelivery,
-      portalColor: draft.portalColor,
-      parentId: draft.parentId || null,
-      priceDisplayInfo: draft.priceDisplayInfo.trim(),
-      displayTextAfterCreate: draft.displayTextAfterCreate.trim(),
-      memo: draft.memo.trim(),
-    });
-  };
+  const trimmed = name.trim();
+  const patch: ServiceLevelPatch = {};
+  if (trimmed && trimmed !== level.name) patch.name = trimmed;
+  if (active !== level.active) patch.active = active;
+  const dirty = Object.keys(patch).length > 0;
+  const valid = trimmed.length > 0;
+  const deletable = canDelete(level);
+  const orders = `${level.usageCount} ${level.usageCount === 1 ? 'order' : 'orders'}`;
 
   return (
     <div className="flex h-full flex-col">
@@ -146,113 +80,67 @@ export function ServiceLevelDetailPanel({ level, mode, parentOptions, onSubmit, 
           Level
         </span>
         <h2 className="min-w-0 flex-1 truncate font-display text-[15px] font-bold tracking-tight text-foreground">
-          {draft.name.trim() || 'Service level'}
+          {trimmed || 'Service level'}
         </h2>
-        {draft.isDefault && <span className="font-mono text-[10px] uppercase tracking-wide text-primary">Default</span>}
+        {!level.active && <span className="font-mono text-[10px] uppercase tracking-wide text-muted-foreground">Retired</span>}
       </div>
 
-      {/* Body */}
-      <div className="min-h-0 flex-1 overflow-auto p-4">
-        <div className="flex flex-col gap-4">
-          {/* Identity */}
+      <div className="flex flex-1 flex-col gap-5 overflow-auto p-4">
+        <section className="flex flex-col gap-3">
           <Eyebrow>Identity</Eyebrow>
           <Field label="Service name *">
-            <Input placeholder="e.g. Expedite" value={draft.name} onChange={(e) => setStr('name', e.target.value)} />
+            <Input placeholder="e.g. Expedite" value={name} onChange={(e) => setName(e.target.value)} />
           </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Short name">
-              <Input placeholder="Short code" value={draft.shortName} onChange={(e) => setStr('shortName', e.target.value)} />
-            </Field>
-            <Field label="Also known as">
-              <Input placeholder="Alt names" value={draft.aka} onChange={(e) => setStr('aka', e.target.value)} />
-            </Field>
-          </div>
+        </section>
 
-          {/* Limits */}
-          <Eyebrow>Limits</Eyebrow>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Max consignment qty">
-              <Input align="right" placeholder="—" value={draft.maxQty} onChange={(e) => setStr('maxQty', e.target.value)} />
-            </Field>
-            <Field label="Max item weight">
-              <Input align="right" placeholder="—" value={draft.maxItemWeight} onChange={(e) => setStr('maxItemWeight', e.target.value)} />
-            </Field>
-          </div>
-          <div>
-            <ToggleRow label="Dangerous goods excluded" checked={draft.dangerousGoodsExcluded} onChange={(v) => setBool('dangerousGoodsExcluded', v)} />
-            <ToggleRow label="Price only on exact match" checked={draft.onlyPriceIfExactMatch} onChange={(v) => setBool('onlyPriceIfExactMatch', v)} />
-          </div>
-
-          {/* Visibility */}
-          <Eyebrow>Visibility</Eyebrow>
-          <div>
-            <ToggleRow label="Hide from customer" checked={draft.hideFromCustomer} onChange={(v) => setBool('hideFromCustomer', v)} />
-            <ToggleRow label="Default service level" checked={draft.isDefault} onChange={(v) => setBool('isDefault', v)} />
-          </div>
-
-          {/* Display */}
-          <Eyebrow>Display</Eyebrow>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Mobile color · preload">
-              <Select options={SERVICE_LEVEL_COLORS} value={draft.mobileColorPreload} onChange={(e) => setStr('mobileColorPreload', e.target.value)} />
-            </Field>
-            <Field label="Mobile color · delivery">
-              <Select options={SERVICE_LEVEL_COLORS} value={draft.mobileColorDelivery} onChange={(e) => setStr('mobileColorDelivery', e.target.value)} />
-            </Field>
-          </div>
-          <Field label="Portal color">
-            <Select options={SERVICE_LEVEL_COLORS} value={draft.portalColor} onChange={(e) => setStr('portalColor', e.target.value)} />
-          </Field>
-          <Field label="Price display note">
-            <Input placeholder="Shown alongside the price" value={draft.priceDisplayInfo} onChange={(e) => setStr('priceDisplayInfo', e.target.value)} />
-          </Field>
-          <Field label="Post-create message">
-            <Input placeholder="Shown after a consignment is created" value={draft.displayTextAfterCreate} onChange={(e) => setStr('displayTextAfterCreate', e.target.value)} />
-          </Field>
-
-          {/* Hierarchy */}
-          <Eyebrow>Hierarchy</Eyebrow>
-          <Field label="Parent service level">
-            <Select options={parentOptions} value={draft.parentId} onChange={(e) => setStr('parentId', e.target.value)} />
-          </Field>
-
-          <Field label="Memo">
-            <Input placeholder="Internal note (optional)" value={draft.memo} onChange={(e) => setStr('memo', e.target.value)} />
-          </Field>
-
-          <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
-            Created by {level.createdBy} · {level.createdAt}
+        <section className="flex flex-col gap-1">
+          <Eyebrow>Availability</Eyebrow>
+          <ToggleRow label="Offered on new consignments" checked={active} onChange={setActive} />
+          <p className="text-xs text-muted-foreground">
+            A retired level leaves the consignment form's dropdown but stays on the orders that already use it.
           </p>
-        </div>
+        </section>
+
+        <section className="flex flex-col gap-1">
+          <Eyebrow>Usage</Eyebrow>
+          <p className="tnum font-mono text-sm text-foreground">{orders}</p>
+          {!deletable && (
+            <p className="text-xs text-muted-foreground">In use, so it cannot be deleted — retire it instead.</p>
+          )}
+        </section>
       </div>
 
       {/* Footer */}
       <div className="flex items-center gap-2 border-t bg-muted/40 px-4 py-3">
-        {confirmingDelete ? (
-          <>
-            <span className="text-xs text-muted-foreground">Delete this level?</span>
-            <Button variant="ghost" size="sm" onClick={() => setConfirmingDelete(false)}>
-              Keep
-            </Button>
-            <Button variant="danger" size="sm" onClick={onDelete}>
-              Delete
-            </Button>
-          </>
-        ) : (
+        {deletable && (
           <Button
             variant="ghost"
             size="sm"
             leadingIcon={<Icon name="trash" size={14} />}
+            disabled={busy}
             onClick={() => setConfirmingDelete(true)}
           >
             Delete
           </Button>
         )}
         <div className="flex-1" />
-        <Button variant="primary" size="sm" onClick={save} disabled={!valid}>
+        <Button variant="primary" size="sm" onClick={() => onSubmit(patch)} disabled={!valid || !dirty || busy}>
           Save changes
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={`Delete ${level.name}?`}
+        body="This removes the level permanently. No order references it, so nothing else changes."
+        confirmLabel="Delete"
+        busy={busy}
+        onConfirm={() => {
+          setConfirmingDelete(false);
+          onDelete();
+        }}
+        onCancel={() => setConfirmingDelete(false)}
+      />
     </div>
   );
 }
