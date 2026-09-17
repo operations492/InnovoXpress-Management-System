@@ -53,7 +53,7 @@ function InvoiceRow({ label, value, strong }: { label: string; value: string; st
 
 export function TaskCardModal({ open, task, onClose, onSave, onChangeStatus, onDelete }: TaskCardModalProps) {
   const { flash } = useToast();
-  const clientNames = useClients().map((c) => c.name);
+  const clients = useClients();
   const form = useForm<TaskFormValues>({ resolver: zodResolver(taskFormSchema), defaultValues: { ...EMPTY_TASK_FORM, ...defaultWindows() } });
   const items = useItemsEditor(task?.items ?? []);
   const [tab, setTab] = useState('overview');
@@ -142,7 +142,7 @@ export function TaskCardModal({ open, task, onClose, onSave, onChangeStatus, onD
       {tab === 'overview' && (
         <TaskForm
           form={form}
-          clientOptions={clientNames}
+          clients={clients}
           itemsSlot={
             <Card title="Items">
               <ItemsEditor

@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { ConsoleLayout } from '@/layouts/ConsoleLayout';
 import { TasksPage } from '@/features/tasks/TasksPage';
 import { UsersPage } from '@/features/users/UsersPage';
+import { ClientsPage } from '@/features/clients/ClientsPage';
 import { ChatPage } from '@/features/chat/ChatPage';
 import { MapPage } from '@/features/map/MapPage';
 import { AdditionalServicesPage } from '@/features/finance/AdditionalServicesPage';
@@ -22,6 +23,7 @@ export default function App() {
       <Route element={<ConsoleLayout />}>
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/users" element={<UsersPage />} />
+        <Route path="/clients" element={<ClientsPage />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/map" element={<MapPage />} />
         <Route path="/finance/additional-services" element={<AdditionalServicesPage />} />

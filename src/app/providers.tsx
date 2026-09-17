@@ -6,6 +6,7 @@ import { ToastProvider } from '@/components/Toast';
 import { AuthProvider } from '@/state/AuthProvider';
 import { TasksProvider } from '@/store/TasksProvider';
 import { UsersProvider } from '@/store/UsersProvider';
+import { ClientsProvider } from '@/store/ClientsProvider';
 import { ChatProvider } from '@/store/ChatProvider';
 import { DispatchRealtimeProvider } from '@/store/DispatchRealtimeProvider';
 import { AdditionalServicesProvider } from '@/store/AdditionalServicesProvider';
@@ -51,6 +52,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
             <ChatProvider>
               <DispatchRealtimeProvider>
                 <UsersProvider>
+                  <ClientsProvider>
                   <TasksProvider>
                     <AdditionalServicesProvider>
                       <FreightItemsProvider>
@@ -66,6 +68,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
                       </FreightItemsProvider>
                     </AdditionalServicesProvider>
                   </TasksProvider>
+                  </ClientsProvider>
                 </UsersProvider>
               </DispatchRealtimeProvider>
             </ChatProvider>

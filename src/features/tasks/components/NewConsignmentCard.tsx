@@ -32,7 +32,7 @@ interface Props {
 }
 
 export function NewConsignmentCard({ open, onClose, onCreate }: Props) {
-  const clientNames = useClients().map((c) => c.name);
+  const clients = useClients();
   const serviceLevelOptions = useServiceLevels().map((s) => ({ value: s.id, label: s.name }));
   const form = useForm<TaskFormValues>({ resolver: zodResolver(taskFormSchema), defaultValues: { ...EMPTY_TASK_FORM, ...defaultWindows() } });
   const items = useItemsEditor([]);
@@ -98,7 +98,7 @@ export function NewConsignmentCard({ open, onClose, onCreate }: Props) {
     >
       <TaskForm
         form={form}
-        clientOptions={clientNames}
+        clients={clients}
         serviceLevelOptions={serviceLevelOptions}
         itemsSlot={
           /* "cubic" is gone — items carry weight and package type, not volume. */

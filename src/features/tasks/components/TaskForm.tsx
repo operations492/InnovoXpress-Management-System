@@ -36,6 +36,8 @@ import type { UseFormReturn } from 'react-hook-form';
 import { Card, Checkbox, Input, Select, Textarea } from '@/ui';
 import type { TaskFormValues } from '@/domain/schemas';
 import { NO_CLIENT } from '@/domain/schemas';
+import { senderFromClient } from '@/domain/client';
+import type { ClientRefDto } from '@/lib/api';
 import { AddressField } from './AddressAutocomplete';
 import { DateTimeField } from './DateTimeField';
 
@@ -124,8 +126,12 @@ const Stack = ({ children }: { children: ReactNode }) => <div className="flex fl
 interface TaskFormProps {
   form: UseFormReturn<TaskFormValues>;
   itemsSlot?: ReactNode;
-  /** Real client names from the API. Only the "not selected" sentinel until they arrive. */
-  clientOptions?: readonly string[];
+  /**
+   * Real clients from the API, address and all. Only the "not selected"
+   * sentinel until they arrive. Full records rather than names because picking
+   * one prefills the sender from its stored address.
+   */
+  clients?: readonly ClientRefDto[];
   /**
    * Active service levels as {value: id, label: name}. The select renders only
    * when this is given, so a screen that has not adopted it shows nothing new.
@@ -133,9 +139,9 @@ interface TaskFormProps {
   serviceLevelOptions?: readonly { value: string; label: string }[];
 }
 
-export function TaskForm({ form, itemsSlot, clientOptions, serviceLevelOptions }: TaskFormProps) {
+export function TaskForm({ form, itemsSlot, clients, serviceLevelOptions }: TaskFormProps) {
   // Never a fixture name here: a name the API does not know cannot be saved.
-  const clients = [NO_CLIENT, ...(clientOptions ?? [])];
+  const clientNames = [NO_CLIENT, ...(clients ?? []).map((c) => c.name)];
 
   const { watch, setValue } = form;
   const v = watch();
@@ -145,6 +151,27 @@ export function TaskForm({ form, itemsSlot, clientOptions, serviceLevelOptions }
     onChange: (e: ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
       setValue(name, e.target.value as never, { shouldDirty: true }),
   });
+
+  /**
+   * Picking a client prefills the sender from its stored address.
+   *
+   * On the pick, not in an effect keyed on the selected name: an effect would
+   * fire again every time the form re-seeded and quietly overwrite edits the
+   * operator had made to an order that already exists. A client with no stored
+   * address changes nothing.
+   */
+  const pickClient = (e: ChangeEvent<HTMLSelectElement>) => {
+    const name = e.target.value;
+    setValue('merchant', name, { shouldDirty: true });
+
+    const picked = clients?.find((c) => c.name === name);
+    const sender = picked ? senderFromClient(picked) : null;
+    if (!sender) return;
+
+    for (const [k, val] of Object.entries(sender) as [keyof TaskFormValues, never][]) {
+      setValue(k, val, { shouldDirty: true });
+    }
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -159,7 +186,7 @@ export function TaskForm({ form, itemsSlot, clientOptions, serviceLevelOptions }
               <Select options={PRIORITY_OPTIONS} {...text('priority')} />
             </Field>
             <Field label="Client" required>
-              <Select options={clients} {...text('merchant')} />
+              <Select options={clientNames} value={v.merchant} onChange={pickClient} />
             </Field>
             {serviceLevelOptions && (
               <Field label="Service level">

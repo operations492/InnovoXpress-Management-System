@@ -118,6 +118,81 @@ export interface ClientDto {
   code: string;
 }
 
+/**
+ * A client's default pickup address. It travels as one value object and comes
+ * back null until it is complete enough to prefill an order *and* route it —
+ * line1, city and both coordinates. The server collapses a partial address to
+ * null rather than hand the form a street with no pin.
+ */
+export interface ClientAddressDto {
+  contactName: string | null;
+  phone: string | null;
+  email: string | null;
+  line1: string;
+  city: string;
+  province: string | null;
+  postcode: string | null;
+  lat: number;
+  lng: number;
+  instructions: string | null;
+}
+
+/**
+ * A client as /api/reference lists it: the dropdown shape plus the address, so
+ * the consignment form can prefill its sender without a request per client.
+ */
+export interface ClientRefDto extends ClientDto {
+  address: ClientAddressDto | null;
+}
+
+/**
+ * A full row from /api/clients.
+ *
+ * Deliberately not a widening of `ClientDto`: that one is the narrow
+ * {id,name,code} shape embedded in a consignment and returned by /api/reference,
+ * and widening it would have every embedded client claim fields the server does
+ * not send there.
+ */
+export interface ClientRecordDto {
+  id: string;
+  name: string;
+  code: string;
+  active: boolean;
+  address: ClientAddressDto | null;
+  /** Orders referencing it. Zero means Delete is allowed; otherwise deactivate. */
+  usageCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** line1, city, lat and lng are required *inside* the address; the rest may be null. */
+export interface ClientAddressInput {
+  contactName?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  line1: string;
+  city: string;
+  province?: string | null;
+  postcode?: string | null;
+  lat: number;
+  lng: number;
+  instructions?: string | null;
+}
+
+export interface CreateClientPayload {
+  name: string;
+  code: string;
+  address?: ClientAddressInput | null;
+}
+
+/** At least one key. `address: null` clears it, omitting it leaves it alone. */
+export interface UpdateClientPayload {
+  name?: string;
+  code?: string;
+  active?: boolean;
+  address?: ClientAddressInput | null;
+}
+
 export interface DriverDto {
   id: string;
   name: string;
@@ -646,7 +721,7 @@ export interface RoutePlaceInput {
 export const api = {
   reference: () =>
     get<{
-      clients: ClientDto[];
+      clients: ClientRefDto[];
       drivers: Array<{ id: string; name: string; code: string | null; mobile: string | null }>;
       /** Active levels only, in dropdown order. */
       serviceLevels: Array<{ id: string; name: string }>;
@@ -658,6 +733,18 @@ export const api = {
   /* ------------------------------------------------------- service levels */
   // Listing is operator+; create, update and delete are admin-only server-side.
   // Delete answers 204 with no body, and a 409 when any order still uses the level.
+
+  // Clients. Admin-only writes, operator+ reads. The list carries the address and
+  // usage count already, so there is no getClient here — nothing needs one.
+  listClients: (params: { includeInactive?: boolean } = {}) =>
+    get<ClientRecordDto[]>(`/api/clients${params.includeInactive ? '?includeInactive=true' : ''}`),
+
+  createClient: (payload: CreateClientPayload) => post<ClientRecordDto>('/api/clients', payload),
+
+  updateClient: (id: string, payload: UpdateClientPayload) =>
+    patch<ClientRecordDto>(`/api/clients/${id}`, payload),
+
+  deleteClient: (id: string) => del<void>(`/api/clients/${id}`),
 
   listServiceLevels: (params: { includeInactive?: boolean } = {}) =>
     get<ServiceLevelDto[]>(`/api/service-levels${params.includeInactive ? '?includeInactive=true' : ''}`),
