@@ -1,61 +1,78 @@
 /**
- * In-memory store for Freight Items — mirrors the other feature stores (context +
- * reducer + useCallback actions + useMemo value). No backend; seeded from
- * SEED_FREIGHT_ITEMS. A reusable lookup that rate cards / services can reference later.
+ * Freight items on the real API (`/api/freight-items`).
+ *
+ * Same shape as ServiceLevelsProvider. The context key stays `items` because the
+ * quote calculator and the rate builder already read it by that name.
  */
-import { createContext, useCallback, useContext, useMemo, useReducer } from 'react';
-import type { ReactNode } from 'react';
-import type { FreightItem, FreightItemInput } from '@/domain/freight';
-import { SEED_FREIGHT_ITEMS } from '@/fixtures/freightItems';
-import { genId } from '@/domain/id';
+import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+import type { FreightItem, FreightItemInput, FreightItemPatch } from '@/domain/freight';
 
-type Action =
-  | { type: 'add'; item: FreightItem }
-  | { type: 'update'; id: string; patch: Partial<FreightItemInput> }
-  | { type: 'remove'; id: string };
-
-function reducer(state: FreightItem[], action: Action): FreightItem[] {
-  switch (action.type) {
-    case 'add':
-      return [...state, action.item];
-    case 'update':
-      return state.map((f) => (f.id === action.id ? { ...f, ...action.patch } : f));
-    case 'remove':
-      return state.filter((f) => f.id !== action.id);
-  }
-}
+export const FREIGHT_ITEMS_KEY = ['freightItems'] as const;
 
 interface FreightItemsStore {
+  /** Every item, disabled ones included, in list order. */
   items: FreightItem[];
-  add: (input: FreightItemInput) => FreightItem;
-  update: (id: string, patch: Partial<FreightItemInput>) => void;
-  remove: (id: string) => void;
+  loading: boolean;
+  error: Error | null;
+  create: (input: FreightItemInput) => Promise<FreightItem>;
+  update: (id: string, patch: FreightItemPatch) => Promise<FreightItem>;
+  remove: (id: string) => Promise<void>;
+  toggleActive: (item: FreightItem) => Promise<FreightItem>;
 }
 
 const FreightItemsContext = createContext<FreightItemsStore | null>(null);
 
 export function FreightItemsProvider({ children }: { children: ReactNode }) {
-  const [items, dispatch] = useReducer(reducer, SEED_FREIGHT_ITEMS);
+  const qc = useQueryClient();
 
-  const add = useCallback((input: FreightItemInput) => {
-    const item: FreightItem = { ...input, id: genId() };
-    dispatch({ type: 'add', item });
-    return item;
-  }, []);
-  const update = useCallback((id: string, patch: Partial<FreightItemInput>) => {
-    dispatch({ type: 'update', id, patch });
-  }, []);
-  const remove = useCallback((id: string) => {
-    dispatch({ type: 'remove', id });
-  }, []);
+  const query = useQuery({
+    queryKey: FREIGHT_ITEMS_KEY,
+    queryFn: () => api.listFreightItems({ includeInactive: true }),
+    staleTime: 60_000,
+  });
 
-  const value = useMemo<FreightItemsStore>(() => ({ items, add, update, remove }), [items, add, update, remove]);
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: FREIGHT_ITEMS_KEY });
+  };
+
+  const { mutateAsync: create } = useMutation({
+    mutationFn: (input: FreightItemInput) => api.createFreightItem(input),
+    onSuccess: invalidate,
+  });
+
+  const { mutateAsync: update } = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: FreightItemPatch }) =>
+      api.updateFreightItem(id, patch),
+    onSuccess: invalidate,
+  });
+
+  const { mutateAsync: remove } = useMutation({
+    mutationFn: (id: string) => api.deleteFreightItem(id),
+    onSuccess: invalidate,
+  });
+
+  const value = useMemo<FreightItemsStore>(
+    () => ({
+      items: query.data ?? [],
+      loading: query.isPending,
+      error: (query.error as Error | null) ?? null,
+      create: (input) => create(input),
+      update: (id, patch) => update({ id, patch }),
+      remove: (id) => remove(id),
+      toggleActive: (item) => update({ id: item.id, patch: { active: !item.active } }),
+    }),
+    [query.data, query.isPending, query.error, create, update, remove],
+  );
 
   return <FreightItemsContext.Provider value={value}>{children}</FreightItemsContext.Provider>;
 }
 
 export function useFreightItemsStore(): FreightItemsStore {
   const ctx = useContext(FreightItemsContext);
-  if (!ctx) throw new Error('useFreightItemsStore must be used within <FreightItemsProvider>');
+  if (!ctx) {
+    throw new Error('useFreightItemsStore must be used within <FreightItemsProvider>');
+  }
   return ctx;
 }

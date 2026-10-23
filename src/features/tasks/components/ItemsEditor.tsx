@@ -24,7 +24,7 @@ const NUM = 'tnum text-right';
  */
 export function ItemsEditor({ items, onAdd, onEdit, onDelete, readOnly }: ItemsEditorProps) {
   const g = itemsGrandTotal(items);
-  const columns = readOnly ? 8 : 9;
+  const columns = readOnly ? 7 : 8;
 
   return (
     <div>
@@ -41,7 +41,6 @@ export function ItemsEditor({ items, onAdd, onEdit, onDelete, readOnly }: ItemsE
         <table className="w-full border-collapse border">
           <thead>
             <tr className="t-table-head">
-              <th className={cn(TH, 'w-[150px]')}>Reference</th>
               <th className={cn(TH, 'w-[64px] text-right')}>Qty</th>
               <th className={TH}>Description</th>
               <th className={cn(TH, 'w-[124px] text-right')}>Total Weight (lb)</th>
@@ -62,7 +61,6 @@ export function ItemsEditor({ items, onAdd, onEdit, onDelete, readOnly }: ItemsE
             )}
             {items.map((it, i) => (
               <tr key={it.id}>
-                <td className={cn(TD, 'text-foreground')}>{it.barcode || '—'}</td>
                 <td className={cn(TD, NUM)}>{fmtQty(it.qty)}</td>
                 <td className={cn(TD, 'text-foreground')}>{it.description || '—'}</td>
                 <td className={cn(TD, NUM)}>{decimal(it.weightLb, 3)}</td>
@@ -87,9 +85,8 @@ export function ItemsEditor({ items, onAdd, onEdit, onDelete, readOnly }: ItemsE
           </tbody>
           <tfoot>
             <tr className="font-semibold text-foreground">
-              <td className={cn(TD, 'font-semibold')}>Total</td>
               <td className={cn(TD, NUM, 'font-semibold')}>{fmtQty(g.qty)}</td>
-              <td className={TD} />
+              <td className={cn(TD, 'font-semibold')}>Total</td>
               <td className={cn(TD, NUM, 'font-semibold')}>{decimal(g.weightLb, 3)}</td>
               <td className={TD} />
               <td className={TD} />

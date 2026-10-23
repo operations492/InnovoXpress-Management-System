@@ -10,14 +10,16 @@ import { useState } from 'react';
 import { Button, Icon, Input, Modal } from '@/ui';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/components/Toast';
-import { money } from '@/domain/format';
-import type { AdditionalServiceInput } from '@/domain/services';
-import { DEFAULT_SERVICE_FLAGS } from '@/domain/services';
+import type { AdditionalServicePatch } from '@/domain/services';
 import { useAdditionalServicesStore } from '@/store/AdditionalServicesProvider';
 import { ServiceDetailPanel } from './components/ServiceDetailPanel';
 
-const GRID = 'grid grid-cols-[1fr_92px_72px] gap-2';
-const Dash = () => <span className="text-muted-foreground">—</span>;
+const GRID = 'grid grid-cols-[1fr_92px] gap-2';
+
+/** ApiError carries a server message; anything else is unknown. */
+function reason(e: unknown): string {
+  return e instanceof Error ? e.message : 'Unknown error';
+}
 
 export function AdditionalServicesPage() {
   const store = useAdditionalServicesStore();
@@ -37,36 +39,38 @@ export function AdditionalServicesPage() {
     setNewName('');
     setNamingNew(true);
   };
-  const createService = () => {
+  const createService = async () => {
     const name = newName.trim();
     if (!name) return;
-    const created = store.add({
-      name,
-      memo: '',
-      customerRate: null,
-      customerPctBase: null,
-      customerMinCharge: null,
-      agentRate: null,
-      agentPctBase: null,
-      agentMinCharge: null,
-      active: true,
-      ...DEFAULT_SERVICE_FLAGS,
-    });
-    setSelectedId(created.id);
-    setNamingNew(false);
-    flash('Service created — set its pricing & options');
+    try {
+      const created = await store.create({ name });
+      setSelectedId(created.id);
+      setNamingNew(false);
+      flash(`${created.name} created`);
+    } catch (e) {
+      flash(`Could not create service: ${reason(e)}`);
+    }
   };
 
-  const submit = (input: AdditionalServiceInput) => {
+  const submit = async (patch: AdditionalServicePatch) => {
     if (!selectedId) return;
-    store.update(selectedId, input);
-    flash('Service updated');
+    try {
+      const saved = await store.update(selectedId, patch);
+      const verb = patch.active === false ? 'hidden' : patch.active === true ? 'shown' : 'saved';
+      flash(`${saved.name} ${verb}`);
+    } catch (e) {
+      flash(`Could not save service: ${reason(e)}`);
+    }
   };
-  const remove = () => {
+  const remove = async () => {
     if (!selectedId) return;
-    store.remove(selectedId);
-    setSelectedId(null);
-    flash('Service deleted');
+    try {
+      await store.remove(selectedId);
+      setSelectedId(null);
+      flash('Service deleted');
+    } catch (e) {
+      flash(`Could not delete service: ${reason(e)}`);
+    }
   };
 
   return (
@@ -94,8 +98,7 @@ export function AdditionalServicesPage() {
           <div className="overflow-hidden rounded-xl border bg-card">
             <div className={cn(GRID, 'border-b bg-muted px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground')}>
               <span>Service</span>
-              <span className="text-right">Cust. Rate</span>
-              <span className="text-right">Rate %</span>
+              <span className="text-right">Status</span>
             </div>
 
             {store.services.length === 0 ? (
@@ -128,11 +131,13 @@ export function AdditionalServicesPage() {
                     >
                       {s.name}
                     </span>
-                    <span className="pointer-events-none z-10 text-right font-mono text-[13px] tabular-nums text-foreground">
-                      {s.customerRate == null ? <Dash /> : money(s.customerRate)}
-                    </span>
-                    <span className="pointer-events-none z-10 text-right font-mono text-[13px] tabular-nums text-foreground">
-                      {s.customerPctBase == null ? <Dash /> : `${s.customerPctBase}%`}
+                    <span
+                      className={cn(
+                        'pointer-events-none z-10 text-right font-mono text-[10px] uppercase tracking-wide',
+                        s.active ? 'text-primary' : 'text-muted-foreground',
+                      )}
+                    >
+                      {s.active ? 'Active' : 'Hidden'}
                     </span>
                   </div>
                 );

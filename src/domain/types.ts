@@ -23,7 +23,7 @@ export type TaskPriority = 'Normal' | 'High' | 'Low';
  */
 export interface TaskItem {
   id: string;
-  /** The client's line reference — the "Reference" column. Empty when none. */
+  /** The client's line reference. No longer typed in the UI; kept so an item that has one round-trips. Empty when none. */
   barcode: string;
   description: string;
   qty: number;

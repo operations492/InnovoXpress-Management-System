@@ -446,6 +446,11 @@ export function MapPage() {
                 onView={(id) => setViewId(id)}
                 onEdit={(id) => setCardId(id)}
                 onAssign={(id) => setAssignId(id)}
+                driverPhotoUrl={
+                  openPin.driver
+                    ? (drivers.find((d) => d.id === openPin.driver?.id)?.photoUrl ?? null)
+                    : null
+                }
                 onSelectSibling={openTask}
               />
             </PinWidgetLayer>

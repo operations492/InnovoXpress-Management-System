@@ -1,250 +1,240 @@
+/**
+ * Finance → Rate Plans — one price list per client.
+ *
+ * A plan is created with a name and a client, then priced in the editor. Only one
+ * plan per client may be active at a time; the server refuses a second with a
+ * 409, so "Activate" on a client that already has a live plan is an error the
+ * operator sees rather than a silent swap.
+ */
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
+import { Button, Icon, Input, Modal, Select } from '@/ui';
 import { cn } from '@/lib/utils';
-import { Button, Icon, Input, Modal, Tabs, type TabItem } from '@/ui';
 import { useToast } from '@/components/Toast';
-import { nowLabel } from '@/domain/format';
-import { genId } from '@/domain/id';
-import { defaultExpiry, plansForScope, type PlanScope, type RatePlanInput } from '@/domain/ratePlan';
+import { money } from '@/domain/format';
+import { api } from '@/lib/api';
+import { CLIENTS_KEY } from '@/store/ClientsProvider';
 import { useRatePlansStore } from '@/store/RatePlansProvider';
-import { useServiceZonesStore } from '@/store/ServiceZonesProvider';
-import { RatePlanInfoPanel } from './components/RatePlanInfoPanel';
-import { AddVersionDialog } from './components/AddVersionDialog';
+import type { RatePlan } from '@/domain/ratePlan';
 
-const GRID = 'grid grid-cols-[1fr_150px_70px_40px] items-center gap-3';
-const SCOPE_TABS: TabItem[] = [
-  { value: 'customer', label: 'Customer Plans' },
-  { value: 'supplier', label: 'Supplier Plans' },
-];
+const GRID = 'grid grid-cols-[1fr_140px_110px_92px_40px] gap-2';
 
-/** Finance › Rate Plans — pricing plans (rate cards) with dated versions. */
+/** ApiError carries a server message; anything else is unknown. */
+function reason(e: unknown): string {
+  return e instanceof Error ? e.message : 'Unknown error';
+}
+
 export function RatePlansPage() {
   const store = useRatePlansStore();
-  const { books } = useServiceZonesStore();
-  const navigate = useNavigate();
   const { flash } = useToast();
+  const navigate = useNavigate();
 
-  const [scope, setScope] = useState<PlanScope>('customer');
+  const clients = useQuery({
+    queryKey: CLIENTS_KEY,
+    queryFn: () => api.listClients(),
+    staleTime: 60_000,
+  });
+
   const [filter, setFilter] = useState('');
-  const [showNew, setShowNew] = useState(false);
-  const [newTitle, setNewTitle] = useState('');
-  const [showAddVersion, setShowAddVersion] = useState(false);
+  const [namingNew, setNamingNew] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newClientId, setNewClientId] = useState('');
+  const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
 
-  const scoped = plansForScope(store.plans, scope);
-  const [selectedId, setSelectedId] = useState<string | null>(scoped[0]?.id ?? null);
-  const selected = scoped.find((p) => p.id === selectedId) ?? null;
-  const otherPlans = scoped.filter((p) => p.id !== selectedId);
+  const needle = filter.trim().toLowerCase();
+  const plans = store.plans.filter(
+    (p) =>
+      !needle ||
+      p.name.toLowerCase().includes(needle) ||
+      p.client.name.toLowerCase().includes(needle),
+  );
+  const activeCount = store.plans.filter((p) => p.active).length;
 
-  const changeScope = (s: string) => {
-    const sc = s as PlanScope;
-    setScope(sc);
-    setSelectedId(plansForScope(store.plans, sc)[0]?.id ?? null);
-    setFilter('');
+  const openNew = () => {
+    setNewName('');
+    setNewClientId('');
+    setNamingNew(true);
   };
 
-  const createPlan = () => {
-    const title = newTitle.trim();
-    if (!title) return;
-    const today = new Date().toISOString().slice(0, 10);
-    const plan = store.add({
-      scope,
-      title,
-      zoneBookId: books[0]?.id ?? null,
-      enabled: true,
-      memo: '',
-      accountIds: [],
-      priceEachLineIndependently: false,
-      fallbackPlanId: null,
-      fallbackMargin: 0,
-      createdBy: 'You',
-      createdAt: nowLabel(),
-      versions: [
-        {
-          id: genId(),
-          effectiveFrom: today,
-          expireOn: defaultExpiry(today),
-          isDefault: true,
-          serviceLevelIds: [],
-          items: [],
-          lanes: [],
-          rateLines: [],
-          serviceCharges: [],
-        },
-      ],
-    });
-    setSelectedId(plan.id);
-    setNewTitle('');
-    setShowNew(false);
-    flash('Rate plan created — configure its version');
+  const createPlan = async () => {
+    const name = newName.trim();
+    if (!name || !newClientId) return;
+    try {
+      const created = await store.create({ name, clientId: newClientId });
+      setNamingNew(false);
+      flash(`${created.name} created`);
+      navigate(`/finance/rate-plans/${created.id}`);
+    } catch (e) {
+      flash(`Could not create plan: ${reason(e)}`);
+    }
   };
 
-  const submit = (patch: Partial<RatePlanInput>) => {
-    if (!selectedId) return;
-    store.update(selectedId, patch);
-    flash('Rate plan updated');
-  };
-  const patchNow = (patch: Partial<RatePlanInput>) => {
-    if (selectedId) store.update(selectedId, patch);
-  };
-  const remove = (id: string) => {
-    store.remove(id);
-    if (id === selectedId) setSelectedId(null);
-    flash('Rate plan deleted');
+  const toggleActive = async (plan: RatePlan) => {
+    try {
+      const saved = await store.update(plan.id, { active: !plan.active });
+      flash(`${saved.name} ${saved.active ? 'activated' : 'deactivated'}`);
+    } catch (e) {
+      flash(`Could not change ${plan.name}: ${reason(e)}`);
+    }
   };
 
-  const visible = scoped.filter((p) => p.title.toLowerCase().includes(filter.trim().toLowerCase()));
-  const bookName = (id: string | null) => books.find((b) => b.id === id)?.name ?? '—';
+  const remove = async (plan: RatePlan) => {
+    try {
+      await store.remove(plan.id);
+      setConfirmingDelete(null);
+      flash(`${plan.name} deleted`);
+    } catch (e) {
+      flash(`Could not delete ${plan.name}: ${reason(e)}`);
+    }
+  };
 
   return (
-    <div className="flex flex-col gap-4 p-6">
-      <div>
-        <h1 className="font-display text-[22px] font-bold tracking-tight text-foreground">Rate Plans</h1>
-        <p className="mt-0.5 text-[13px] text-muted-foreground">
-          Pricing plans that determine what customers are charged and suppliers are paid.
-        </p>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div className="flex items-baseline gap-3 px-4 pt-4 pb-2">
+        <h1 className="font-display text-[22px] font-bold tracking-tight text-foreground">
+          Rate Plans
+        </h1>
+        <span className="font-mono text-[11px] text-muted-foreground">
+          <b className="font-semibold text-foreground">{store.plans.length}</b> plans ·{' '}
+          {activeCount} active · one active plan per client
+        </span>
       </div>
 
-      <div className="border-b">
-        <Tabs items={SCOPE_TABS} value={scope} onChange={changeScope} />
-      </div>
-
-      <div className="flex items-center gap-3">
-        <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">{scoped.length} plans</span>
+      <div className="flex items-center gap-2 px-4 pb-3">
+        <Input
+          placeholder="Filter by plan or client"
+          value={filter}
+          onChange={(e) => setFilter(e.target.value)}
+          icon={<Icon name="search" size={14} />}
+          style={{ maxWidth: 280 }}
+        />
         <div className="flex-1" />
-        <Button variant="utility" size="sm" leadingIcon={<Icon name="sliders" size={15} />} onClick={() => navigate('/finance/quote')}>
+        <Button variant="utility" size="sm" onClick={() => navigate('/finance/quote')}>
           Quote Calculator
         </Button>
-        <Button variant="primary" size="sm" leadingIcon={<Icon name="plus" size={15} />} onClick={() => setShowNew(true)}>
+        <Button
+          variant="primary"
+          size="sm"
+          leadingIcon={<Icon name="plus" size={14} />}
+          onClick={openNew}
+        >
           New Rate Plan
         </Button>
       </div>
 
-      <div className="flex flex-col gap-4 lg:flex-row">
-        <div className="min-w-0 flex-1">
-          <div className="overflow-hidden rounded-xl border bg-card">
-            <div className="border-b p-2">
-              <Input
-                icon={<Icon name="search" size={15} />}
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                placeholder="Filter by title…"
-              />
-            </div>
-            <div
-              className={cn(
-                GRID,
-                'border-b bg-muted px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground',
-              )}
-            >
-              <span>Plan Title</span>
-              <span>Zone Book</span>
-              <span className="text-right">Versions</span>
-              <span />
-            </div>
-            {visible.map((p) => {
-              const isSel = p.id === selectedId;
-              return (
-                <div
-                  key={p.id}
+      <div className="min-h-0 flex-1 overflow-auto px-4 pb-4">
+        <div className="overflow-hidden rounded-xl border bg-card">
+          <div
+            className={cn(
+              GRID,
+              'border-b bg-muted px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground',
+            )}
+          >
+            <span>Plan</span>
+            <span>Client</span>
+            <span className="text-right">Base rate</span>
+            <span className="text-right">Status</span>
+            <span />
+          </div>
+
+          {store.loading ? (
+            <p className="px-4 py-10 text-center text-sm text-muted-foreground">Loading…</p>
+          ) : plans.length === 0 ? (
+            <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+              {store.plans.length === 0 ? 'No rate plans yet.' : 'Nothing matches that filter.'}
+            </p>
+          ) : (
+            plans.map((p) => (
+              <div
+                key={p.id}
+                className={cn(GRID, 'items-center border-b px-4 py-2.5 last:border-b-0 hover:bg-muted/50')}
+              >
+                <button
+                  type="button"
+                  onClick={() => navigate(`/finance/rate-plans/${p.id}`)}
+                  className="truncate text-left text-sm font-medium text-foreground hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                >
+                  {p.name}
+                </button>
+                <span className="truncate text-sm text-muted-foreground">{p.client.name}</span>
+                <span className="text-right font-mono text-[13px] tabular-nums text-foreground">
+                  {money(p.baseRate)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => toggleActive(p)}
                   className={cn(
-                    'relative border-b border-l-2 last:border-b-0',
-                    isSel ? 'border-l-primary bg-accent' : 'border-l-transparent hover:bg-muted',
+                    'text-right font-mono text-[10px] uppercase tracking-wide hover:underline',
+                    p.active ? 'text-primary' : 'text-muted-foreground',
                   )}
                 >
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(p.id)}
-                    className="absolute inset-0 z-0"
-                    aria-label={`Select ${p.title}`}
-                  />
-                  <div className={cn(GRID, 'pointer-events-none relative z-10 px-4 py-2.5')}>
-                    <span className="inline-flex min-w-0 items-center gap-2">
-                      <span
-                        className="size-2 shrink-0 rounded-full"
-                        style={{ backgroundColor: p.enabled ? 'var(--status-success)' : 'var(--color-placeholder)' }}
-                      />
-                      <span className="truncate text-[13px] font-medium text-foreground">{p.title}</span>
-                    </span>
-                    <span className="truncate text-[12px] text-muted-foreground">{bookName(p.zoneBookId)}</span>
-                    <span className="text-right font-mono text-[12.5px] text-foreground">{p.versions.length}</span>
-                    <button
-                      type="button"
-                      aria-label={`Delete ${p.title}`}
-                      onClick={() => remove(p.id)}
-                      className="pointer-events-auto grid size-7 place-items-center rounded-md text-muted-foreground hover:text-foreground"
-                    >
-                      <Icon name="trash" size={14} />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-            {visible.length === 0 && (
-              <div className="px-4 py-10 text-center text-[13px] text-muted-foreground">No plans.</div>
-            )}
-          </div>
+                  {p.active ? 'Active' : 'Inactive'}
+                </button>
+                {confirmingDelete === p.id ? (
+                  <Button variant="danger" size="sm" onClick={() => remove(p)}>
+                    <Icon name="trash" size={14} />
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Delete ${p.name}`}
+                    onClick={() => setConfirmingDelete(p.id)}
+                  >
+                    <Icon name="trash" size={14} />
+                  </Button>
+                )}
+              </div>
+            ))
+          )}
         </div>
-
-        <aside className="w-full shrink-0 lg:w-[400px]">
-          <div className="overflow-hidden rounded-xl border bg-card lg:sticky lg:top-4 lg:h-[calc(100vh-200px)]">
-            <RatePlanInfoPanel
-              key={selectedId ?? 'empty'}
-              plan={selected}
-              mode={selected ? 'edit' : 'empty'}
-              zoneBooks={books}
-              otherPlans={otherPlans}
-              onSubmit={submit}
-              onPatchNow={patchNow}
-              onDelete={() => selected && remove(selected.id)}
-              onAddVersion={() => setShowAddVersion(true)}
-              onBuildVersion={(versionId) => selected && navigate(`/finance/rate-plans/${selected.id}/build/${versionId}`)}
-              onDeleteVersion={(versionId) => selected && store.removeVersion(selected.id, versionId)}
-            />
-          </div>
-        </aside>
       </div>
 
-      {selected && (
-        <AddVersionDialog
-          open={showAddVersion}
-          onClose={() => setShowAddVersion(false)}
-          plan={selected}
-          otherPlans={otherPlans}
-          onCreate={(version) => {
-            store.addVersion(selected.id, version);
-            flash('Rate version added');
-          }}
-        />
-      )}
-
       <Modal
-        open={showNew}
-        onClose={() => setShowNew(false)}
-        width={440}
-        title={`New ${scope === 'customer' ? 'Customer' : 'Supplier'} Rate Plan`}
+        open={namingNew}
+        title="New rate plan"
+        onClose={() => setNamingNew(false)}
+        width={420}
         footer={
-          <div className="flex justify-end gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setShowNew(false)}>
+          <>
+            <Button variant="ghost" size="sm" onClick={() => setNamingNew(false)}>
               Cancel
             </Button>
-            <Button variant="primary" size="sm" disabled={!newTitle.trim()} onClick={createPlan}>
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={createPlan}
+              disabled={!newName.trim() || !newClientId}
+            >
               Create
             </Button>
-          </div>
+          </>
         }
       >
-        <label className="block">
-          <span className="mb-1 block text-[11.5px] font-medium text-muted-foreground">Plan Title</span>
-          <Input
-            autoFocus
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            placeholder="e.g. Metaltrone Manufacturing Inc."
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') createPlan();
-            }}
-          />
-        </label>
+        <div className="flex flex-col gap-4">
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">
+              Plan name<span className="text-primary"> *</span>
+            </span>
+            <Input
+              placeholder="e.g. 2026 Standard"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+            />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">
+              Client<span className="text-primary"> *</span>
+            </span>
+            <Select
+              placeholder="Select a client"
+              value={newClientId}
+              onChange={(e) => setNewClientId(e.target.value)}
+              options={(clients.data ?? []).map((c) => ({ value: c.id, label: c.name }))}
+            />
+          </label>
+        </div>
       </Modal>
     </div>
   );

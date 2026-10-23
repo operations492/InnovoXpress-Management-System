@@ -1,4 +1,4 @@
-import { Avatar, Icon, IconButton } from '@/ui';
+import { Avatar, Checkbox, Icon, IconButton } from '@/ui';
 import type { MapPinDto } from '@/lib/api';
 import { endAddress, type PlotEnd } from '../state/mapView';
 
@@ -8,7 +8,14 @@ interface TaskRowProps {
   plotEnd: PlotEnd;
   /** Status hue, or the driver's, depending on the colour mode. */
   borderColour: string;
+  /**
+   * The row whose widget is open on the map. NOT the tick-box — these are two
+   * different ideas and fusing them would make opening a task select it.
+   */
   selected: boolean;
+  /** Ticked for a bulk action. Omit `onToggle` to render a row with no tick-box. */
+  checked?: boolean;
+  onToggle?: (taskId: string) => void;
   onOpen: (taskId: string) => void;
   onAssign: (taskId: string) => void;
   onEdit: (taskId: string) => void;
@@ -42,6 +49,8 @@ export function TaskRow({
   plotEnd,
   borderColour,
   selected,
+  checked = false,
+  onToggle,
   onOpen,
   onAssign,
   onEdit,
@@ -54,10 +63,21 @@ export function TaskRow({
   return (
     <div
       className={`group/row relative flex items-center gap-2 border-b py-2 pr-2 pl-3 transition-colors ${
-        selected ? 'bg-accent' : 'hover:bg-muted'
+        selected ? 'bg-accent' : checked ? 'bg-primary/5' : 'hover:bg-muted'
       }`}
       style={{ boxShadow: `inset 3px 0 0 0 ${borderColour}` }}
     >
+      {onToggle && (
+        // Its own control rather than a click on the row: the row body already
+        // opens the task, and an operator ticking ten rows must not reframe the
+        // map ten times.
+        <Checkbox
+          checked={checked}
+          onChange={() => onToggle(pin.id)}
+          style={{ flex: 'none' }}
+        />
+      )}
+
       <button
         type="button"
         onClick={() => onOpen(pin.id)}

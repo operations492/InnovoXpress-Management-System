@@ -37,7 +37,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
  * roster) and never fetches, which is what makes the click feel instant. The
  * same rule `TaskWidget` follows.
  *
- * **There is no profile photo and no column to put one in.** `drivers` has no
+ * **The photo comes from the roster row; Avatar falls back to initials without one.** `drivers` has no
  * image field and there is no avatar bucket, so this shows initials tinted with
  * the driver's own map colour — the same hue as their pin and their tasks, which
  * is the thing an operator is actually matching on.
@@ -61,6 +61,7 @@ export function DriverWidget({
       <div className="mb-2.5 flex items-start gap-2.5">
         <Avatar
           name={position.name}
+          src={driver?.photoUrl ?? null}
           size={38}
           style={{ boxShadow: `0 0 0 2px ${colour}` }}
         />

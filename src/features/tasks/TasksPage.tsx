@@ -232,7 +232,7 @@ export function TasksPage() {
       </div>
 
       {filters.tab === 'search' ? (
-        <SearchPanel tasks={allTasks} onView={(id) => setViewId(id)} />
+        <SearchPanel onView={(id) => setViewId(id)} />
       ) : (
         <>
           <TaskToolbar

@@ -34,10 +34,20 @@ export function userFormSchema(mode: 'create' | 'edit') {
             .max(72)
             .refine((v) => v === '' || v.length >= 8, 'Password must be at least 8 characters'),
     role: z.enum(ROLES),
-    /** Driver only — ignored for other roles, and not sent. */
-    driverCode: z.string().trim().max(20),
-    driverMobile: z.string().trim().max(40),
-  });
+    /** Which roster row this login belongs to. Required when the role is driver. */
+    driverId: z.string(),
+    })
+    .superRefine((v, ctx) => {
+      // A driver login with no roster row cannot use a single driver endpoint,
+      // so the server refuses it too — this just says so before the round trip.
+      if (mode === 'create' && v.role === 'driver' && v.driverId === '') {
+        ctx.addIssue({
+          code: 'custom',
+          message: 'Select which driver this login belongs to',
+          path: ['driverId'],
+        });
+      }
+    });
 }
 
 export type UserFormValues = z.infer<ReturnType<typeof userFormSchema>>;
@@ -47,6 +57,5 @@ export const EMPTY_USER_FORM: UserFormValues = {
   email: '',
   password: '',
   role: 'operator',
-  driverCode: '',
-  driverMobile: '',
+  driverId: '',
 };

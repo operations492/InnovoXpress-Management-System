@@ -54,7 +54,7 @@ export function DriverRow({
           expanded ? 'bg-accent' : 'hover:bg-muted'
         }`}
       >
-        <Avatar name={driver.name} size={30} />
+        <Avatar name={driver.name} src={driver.photoUrl} size={30} />
 
         <span className="min-w-0 flex-1">
           <span className="flex items-center gap-1.5">

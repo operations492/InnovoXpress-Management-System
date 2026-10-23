@@ -1,72 +1,89 @@
 /**
- * In-memory store for the Additional Services (extra charges) catalog — mirrors
- * TasksProvider (context + reducer + useCallback action creators + useMemo value).
- * No backend; seeded from SEED_ADDITIONAL_SERVICES. This is the single source of
- * truth consumed by both the Finance config page and the create-consignment dropdown.
+ * Additional services on the real API (`/api/additional-services`).
+ *
+ * Same shape as ServiceLevelsProvider: retired entries are fetched too, because
+ * the admin screen lists them and a dropdown filters them out itself.
  */
-import { createContext, useCallback, useContext, useMemo, useReducer } from 'react';
-import type { ReactNode } from 'react';
-import type { AdditionalService, AdditionalServiceInput } from '@/domain/services';
-import { SEED_ADDITIONAL_SERVICES } from '@/fixtures/additionalServices';
-import { genId } from '@/domain/id';
+import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { api } from '@/lib/api';
+import type {
+  AdditionalService,
+  AdditionalServiceInput,
+  AdditionalServicePatch,
+} from '@/domain/services';
 
-type Action =
-  | { type: 'add'; service: AdditionalService }
-  | { type: 'update'; id: string; patch: Partial<AdditionalServiceInput> }
-  | { type: 'remove'; id: string }
-  | { type: 'toggleActive'; id: string };
-
-function reducer(state: AdditionalService[], action: Action): AdditionalService[] {
-  switch (action.type) {
-    case 'add':
-      return [...state, action.service];
-    case 'update':
-      return state.map((s) => (s.id === action.id ? { ...s, ...action.patch } : s));
-    case 'remove':
-      return state.filter((s) => s.id !== action.id);
-    case 'toggleActive':
-      return state.map((s) => (s.id === action.id ? { ...s, active: !s.active } : s));
-  }
-}
+export const ADDITIONAL_SERVICES_KEY = ['additionalServices'] as const;
 
 interface AdditionalServicesStore {
+  /** Every service, retired ones included, in list order. */
   services: AdditionalService[];
-  add: (input: AdditionalServiceInput) => AdditionalService;
-  update: (id: string, patch: Partial<AdditionalServiceInput>) => void;
-  remove: (id: string) => void;
-  toggleActive: (id: string) => void;
+  loading: boolean;
+  error: Error | null;
+  create: (input: AdditionalServiceInput) => Promise<AdditionalService>;
+  update: (id: string, patch: AdditionalServicePatch) => Promise<AdditionalService>;
+  remove: (id: string) => Promise<void>;
+  /** Convenience for the list's strikethrough toggle. */
+  toggleActive: (service: AdditionalService) => Promise<AdditionalService>;
 }
 
 const AdditionalServicesContext = createContext<AdditionalServicesStore | null>(null);
 
 export function AdditionalServicesProvider({ children }: { children: ReactNode }) {
-  const [services, dispatch] = useReducer(reducer, SEED_ADDITIONAL_SERVICES);
+  const qc = useQueryClient();
 
-  const add = useCallback((input: AdditionalServiceInput) => {
-    const service: AdditionalService = { ...input, id: genId() };
-    dispatch({ type: 'add', service });
-    return service;
-  }, []);
-  const update = useCallback((id: string, patch: Partial<AdditionalServiceInput>) => {
-    dispatch({ type: 'update', id, patch });
-  }, []);
-  const remove = useCallback((id: string) => {
-    dispatch({ type: 'remove', id });
-  }, []);
-  const toggleActive = useCallback((id: string) => {
-    dispatch({ type: 'toggleActive', id });
-  }, []);
+  const query = useQuery({
+    queryKey: ADDITIONAL_SERVICES_KEY,
+    queryFn: () => api.listAdditionalServices({ includeInactive: true }),
+    staleTime: 60_000,
+  });
+
+  const invalidate = () => {
+    void qc.invalidateQueries({ queryKey: ADDITIONAL_SERVICES_KEY });
+  };
+
+  const { mutateAsync: create } = useMutation({
+    mutationFn: (input: AdditionalServiceInput) => api.createAdditionalService(input),
+    onSuccess: invalidate,
+  });
+
+  const { mutateAsync: update } = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: AdditionalServicePatch }) =>
+      api.updateAdditionalService(id, patch),
+    onSuccess: invalidate,
+  });
+
+  const { mutateAsync: remove } = useMutation({
+    mutationFn: (id: string) => api.deleteAdditionalService(id),
+    onSuccess: invalidate,
+  });
 
   const value = useMemo<AdditionalServicesStore>(
-    () => ({ services, add, update, remove, toggleActive }),
-    [services, add, update, remove, toggleActive],
+    () => ({
+      services: query.data ?? [],
+      loading: query.isPending,
+      error: (query.error as Error | null) ?? null,
+      create: (input) => create(input),
+      update: (id, patch) => update({ id, patch }),
+      remove: (id) => remove(id),
+      toggleActive: (service) => update({ id: service.id, patch: { active: !service.active } }),
+    }),
+    [query.data, query.isPending, query.error, create, update, remove],
   );
 
-  return <AdditionalServicesContext.Provider value={value}>{children}</AdditionalServicesContext.Provider>;
+  return (
+    <AdditionalServicesContext.Provider value={value}>
+      {children}
+    </AdditionalServicesContext.Provider>
+  );
 }
 
 export function useAdditionalServicesStore(): AdditionalServicesStore {
   const ctx = useContext(AdditionalServicesContext);
-  if (!ctx) throw new Error('useAdditionalServicesStore must be used within <AdditionalServicesProvider>');
+  if (!ctx) {
+    throw new Error(
+      'useAdditionalServicesStore must be used within <AdditionalServicesProvider>',
+    );
+  }
   return ctx;
 }

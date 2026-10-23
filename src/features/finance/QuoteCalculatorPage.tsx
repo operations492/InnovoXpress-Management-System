@@ -1,273 +1,315 @@
-import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { cn } from '@/lib/utils';
+/**
+ * Finance → Quote Calculator — a test invoice.
+ *
+ * Pick a client, type a distance, choose what was sold, and the server prices it
+ * against that client's active rate plan and returns every line with the
+ * arithmetic behind it. Nothing is saved; this is a preview.
+ *
+ * The distance is typed, not derived. OSRM degrades to straight-line distance
+ * when it is unreachable — fine on a map, wrong on an invoice — so the operator
+ * owns the number here.
+ */
+import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Button, Icon, Input, Select } from '@/ui';
-import { activeVersion, plansForScope, type PlanScope } from '@/domain/ratePlan';
-import { computeQuote, type QuoteLine } from '@/domain/ratePlanQuote';
-import { currentRate } from '@/domain/rateLevy';
-import { isActiveOn } from '@/domain/taxRate';
-import { useRatePlansStore } from '@/store/RatePlansProvider';
-import { useServiceLevelsStore } from '@/store/ServiceLevelsProvider';
+import { cn } from '@/lib/utils';
+import { money } from '@/domain/format';
+import { api, type InvoicePreviewDto } from '@/lib/api';
+import { CLIENTS_KEY } from '@/store/ClientsProvider';
+import { useAdditionalServicesStore } from '@/store/AdditionalServicesProvider';
 import { useFreightItemsStore } from '@/store/FreightItemsProvider';
-import { useRateLeviesStore } from '@/store/RateLeviesProvider';
-import { useTaxRatesStore } from '@/store/TaxRatesProvider';
+import { useServiceLevelsStore } from '@/store/ServiceLevelsProvider';
 
-const TODAY = new Date().toISOString().slice(0, 10);
-const GRID = 'grid grid-cols-[1.4fr_50px_70px_60px_60px_60px_50px_28px] items-center gap-2';
-const money = (n: number) => `$${n.toFixed(2)}`;
-
-function emptyLine(freightItemId: string): QuoteLine {
-  return { freightItemId, qty: 1, weightKg: 0, length: 0, width: 0, height: 0, cubicQty: 1 };
+interface Line {
+  id: string;
+  qty: number;
 }
 
-/** Finance › Quote Calculator — live price check against a rate plan (+ levy + tax). */
-export function QuoteCalculatorPage() {
-  const { plans } = useRatePlansStore();
-  const { levels } = useServiceLevelsStore();
-  const { items: freightItems } = useFreightItemsStore();
-  const { levies } = useRateLeviesStore();
-  const { rates: taxRates } = useTaxRatesStore();
-  const navigate = useNavigate();
-
-  const [scope, setScope] = useState<PlanScope>('customer');
-  const scoped = plansForScope(plans, scope);
-  const [planId, setPlanId] = useState(scoped[0]?.id ?? '');
-  const plan = scoped.find((p) => p.id === planId) ?? null;
-  const version = plan ? activeVersion(plan, TODAY) : null;
-
-  const [serviceLevelId, setServiceLevelId] = useState(version?.serviceLevelIds[0] ?? '');
-  const [laneId, setLaneId] = useState(version?.lanes[0]?.id ?? '');
-  const [lines, setLines] = useState<QuoteLine[]>([emptyLine(freightItems[0]?.id ?? '')]);
-
-  const fname = (id: string) => freightItems.find((f) => f.id === id)?.name ?? id;
-
-  const result = useMemo(() => {
-    if (!plan) return null;
-    const levy = levies.find((l) => l.scope === scope && l.enabled && l.isDefault) ?? levies.find((l) => l.scope === scope && l.enabled);
-    const lr = levy ? currentRate(levy, TODAY) : null;
-    const levyPct = lr && !lr.flatRate ? lr.rate : 0;
-    const tax = taxRates.find((t) => t.enabled && isActiveOn(t, TODAY));
-    return computeQuote(
-      plan,
-      { serviceLevelId, laneId, lines },
-      {
-        freightItemName: fname,
-        levyLabel: levy ? `Levy (${levyPct}%)` : 'Levy',
-        levyPct,
-        taxLabel: tax ? `${tax.title} (${tax.rate}%)` : 'Tax',
-        taxPct: tax ? tax.rate : 0,
-      },
-      TODAY,
-    );
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [plan, serviceLevelId, laneId, lines, levies, taxRates, scope]);
-
-  const updateLine = (i: number, p: Partial<QuoteLine>) =>
-    setLines((ls) => ls.map((l, idx) => (idx === i ? { ...l, ...p } : l)));
-  const addLine = () => setLines((ls) => [...ls, emptyLine(freightItems[0]?.id ?? '')]);
-  const removeLine = (i: number) => setLines((ls) => ls.filter((_, idx) => idx !== i));
-
-  const changePlan = (id: string) => {
-    setPlanId(id);
-    const p = scoped.find((x) => x.id === id);
-    const v = p ? activeVersion(p, TODAY) : null;
-    setServiceLevelId(v?.serviceLevelIds[0] ?? '');
-    setLaneId(v?.lanes[0]?.id ?? '');
-  };
-  const changeScope = (s: PlanScope) => {
-    setScope(s);
-    const first = plansForScope(plans, s)[0];
-    changePlanFor(first?.id ?? '', s);
-  };
-  const changePlanFor = (id: string, s: PlanScope) => {
-    setPlanId(id);
-    const p = plansForScope(plans, s).find((x) => x.id === id);
-    const v = p ? activeVersion(p, TODAY) : null;
-    setServiceLevelId(v?.serviceLevelIds[0] ?? '');
-    setLaneId(v?.lanes[0]?.id ?? '');
-  };
-
-  return (
-    <div className="flex flex-col gap-4 p-6">
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => navigate('/finance/rate-plans')}
-          className="inline-flex items-center gap-1 rounded-md px-2 py-1 text-[12px] font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-        >
-          <Icon name="chevronLeft" size={14} /> Rate Plans
-        </button>
-      </div>
-      <div>
-        <h1 className="font-display text-[22px] font-bold tracking-tight text-foreground">Quote Calculator</h1>
-        <p className="mt-0.5 text-[13px] text-muted-foreground">
-          Check a live price for a consignment against any rate plan — levy and tax included.
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-4 lg:flex-row">
-        {/* inputs */}
-        <div className="min-w-0 flex-1 space-y-4">
-          <div className="rounded-xl border bg-card p-4">
-            <div className="mb-3 font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Basic details</div>
-            <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-              <Labeled label="Scope">
-                <Select
-                  value={scope}
-                  options={[
-                    { value: 'customer', label: 'Customer' },
-                    { value: 'supplier', label: 'Supplier' },
-                  ]}
-                  onChange={(e) => changeScope(e.target.value as PlanScope)}
-                />
-              </Labeled>
-              <Labeled label="Rate plan">
-                <Select value={planId} options={scoped.map((p) => ({ value: p.id, label: p.title }))} onChange={(e) => changePlan(e.target.value)} />
-              </Labeled>
-              <Labeled label="Service level">
-                <Select
-                  value={serviceLevelId}
-                  placeholder="—"
-                  options={(version?.serviceLevelIds ?? []).map((id) => ({ value: id, label: levels.find((l) => l.id === id)?.name ?? id }))}
-                  onChange={(e) => setServiceLevelId(e.target.value)}
-                />
-              </Labeled>
-              <Labeled label="Lane">
-                <Select
-                  value={laneId}
-                  placeholder="—"
-                  options={(version?.lanes ?? []).map((l) => ({ value: l.id, label: `${l.source} → ${l.dest}` }))}
-                  onChange={(e) => setLaneId(e.target.value)}
-                />
-              </Labeled>
-            </div>
-          </div>
-
-          <div className="rounded-xl border bg-card p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <span className="font-mono text-[11px] uppercase tracking-[0.08em] text-muted-foreground">Items</span>
-              <Button variant="utility" size="sm" leadingIcon={<Icon name="plus" size={14} />} onClick={addLine}>
-                Add line
-              </Button>
-            </div>
-            <div className="overflow-x-auto">
-              <div className="min-w-[560px]">
-                <div className={cn(GRID, 'border-b bg-muted px-2 py-1.5 font-mono text-[10px] uppercase tracking-[0.06em] text-muted-foreground')}>
-                  <span>Freight item</span>
-                  <span>Qty</span>
-                  <span>Weight</span>
-                  <span>L (m)</span>
-                  <span>W (m)</span>
-                  <span>H (m)</span>
-                  <span>Cubic</span>
-                  <span />
-                </div>
-                {lines.map((l, i) => (
-                  <div key={i} className={cn(GRID, 'px-2 py-1.5')}>
-                    <Select value={l.freightItemId} options={freightItems.map((f) => ({ value: f.id, label: f.name }))} onChange={(e) => updateLine(i, { freightItemId: e.target.value })} />
-                    <Input type="number" value={String(l.qty)} onChange={(e) => updateLine(i, { qty: Number(e.target.value) })} />
-                    <Input type="number" value={String(l.weightKg)} onChange={(e) => updateLine(i, { weightKg: Number(e.target.value) })} />
-                    <Input type="number" step={0.01} value={String(l.length)} onChange={(e) => updateLine(i, { length: Number(e.target.value) })} />
-                    <Input type="number" step={0.01} value={String(l.width)} onChange={(e) => updateLine(i, { width: Number(e.target.value) })} />
-                    <Input type="number" step={0.01} value={String(l.height)} onChange={(e) => updateLine(i, { height: Number(e.target.value) })} />
-                    <Input type="number" value={String(l.cubicQty)} onChange={(e) => updateLine(i, { cubicQty: Number(e.target.value) })} />
-                    <button
-                      type="button"
-                      aria-label="Remove line"
-                      onClick={() => removeLine(i)}
-                      className="grid size-6 place-items-center self-center rounded text-muted-foreground hover:text-foreground"
-                    >
-                      <Icon name="x" size={13} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* result */}
-        <aside className="w-full shrink-0 lg:w-[360px]">
-          <div className="overflow-hidden rounded-xl border bg-card lg:sticky lg:top-4">
-            <div className="border-b bg-accent px-4 py-3">
-              <span className="font-mono text-[10px] uppercase tracking-[0.08em] text-primary">Quote</span>
-              <span className="ml-2 text-[13px] font-semibold text-foreground">{plan?.title ?? '—'}</span>
-            </div>
-            <div className="space-y-1.5 p-4">
-              {!result || !result.ok ? (
-                <p className="py-6 text-center text-[13px] text-muted-foreground">
-                  {result?.message ?? 'Select a plan and add a line.'}
-                </p>
-              ) : (
-                <>
-                  {result.rows.map((r, i) => (
-                    <Row key={i} label={r.label} value={money(r.amount)} />
-                  ))}
-                  <div className="my-2 h-px bg-border" />
-                  <Row label="Subtotal" value={money(result.subtotal)} strong />
-                  {result.levyPct > 0 && <Row label={result.levyLabel} value={money(result.levy)} muted />}
-                  {result.taxPct > 0 && <Row label={result.taxLabel} value={money(result.tax)} muted />}
-                  <div className="my-2 h-px bg-border" />
-                  <Row label="Grand Total" value={money(result.total)} grand />
-                </>
-              )}
-            </div>
-            {result && result.notes.length > 0 && (
-              <div className="border-t bg-muted/50 px-4 py-3">
-                <div className="mb-1 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
-                  Calculation notes
-                </div>
-                <ul className="space-y-0.5">
-                  {result.notes.map((n, i) => (
-                    <li key={i} className="text-[11.5px] text-muted-foreground">
-                      {n}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </div>
-        </aside>
-      </div>
-    </div>
-  );
+function reason(e: unknown): string {
+  return e instanceof Error ? e.message : 'Unknown error';
 }
 
 function Labeled({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <label className="block">
-      <span className="mb-1 block text-[11px] font-medium text-muted-foreground">{label}</span>
+    <label className="flex flex-col gap-1.5">
+      <span className="text-xs font-medium text-muted-foreground">{label}</span>
       {children}
     </label>
   );
 }
 
-function Row({
-  label,
-  value,
-  strong,
-  grand,
-  muted,
-}: {
-  label: string;
-  value: string;
-  strong?: boolean;
-  grand?: boolean;
-  muted?: boolean;
-}) {
+export function QuoteCalculatorPage() {
+  const clients = useQuery({
+    queryKey: CLIENTS_KEY,
+    queryFn: () => api.listClients(),
+    staleTime: 60_000,
+  });
+  const { levels } = useServiceLevelsStore();
+  const { services } = useAdditionalServicesStore();
+  const { items: freight } = useFreightItemsStore();
+
+  const [clientId, setClientId] = useState('');
+  const [distanceKm, setDistanceKm] = useState('51');
+  const [serviceLevelId, setServiceLevelId] = useState('');
+  const [serviceIds, setServiceIds] = useState<string[]>([]);
+  const [lines, setLines] = useState<Line[]>([]);
+
+  const [result, setResult] = useState<InvoicePreviewDto | null>(null);
+  const [failure, setFailure] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  const activeLevels = levels.filter((l) => l.active);
+  const activeServices = services.filter((s) => s.active);
+  const activeFreight = freight.filter((f) => f.active);
+
+  const toggleService = (id: string) =>
+    setServiceIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+
+  const addLine = () => {
+    const first = activeFreight[0];
+    if (first) setLines((prev) => [...prev, { id: first.id, qty: 1 }]);
+  };
+  const updateLine = (i: number, patch: Partial<Line>) =>
+    setLines((prev) => prev.map((l, n) => (n === i ? { ...l, ...patch } : l)));
+  const removeLine = (i: number) => setLines((prev) => prev.filter((_, n) => n !== i));
+
+  const calculate = async () => {
+    setBusy(true);
+    setFailure(null);
+    try {
+      const quote = await api.previewInvoice({
+        clientId,
+        distanceKm: Number(distanceKm) || 0,
+        ...(serviceLevelId ? { serviceLevelId } : {}),
+        additionalServiceIds: serviceIds,
+        freightItems: lines.map((l) => ({ id: l.id, qty: l.qty })),
+      });
+      setResult(quote);
+    } catch (e) {
+      setResult(null);
+      setFailure(reason(e));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
-    <div className="flex items-center justify-between">
-      <span className={cn('text-[13px]', muted ? 'text-muted-foreground' : 'text-foreground', grand && 'font-semibold')}>
-        {label}
-      </span>
-      <span
-        className={cn(
-          'font-mono tabular-nums',
-          grand ? 'text-[15px] font-bold text-primary' : strong ? 'text-[13px] font-semibold text-foreground' : 'text-[13px] text-foreground',
-        )}
-      >
-        {value}
-      </span>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div className="flex items-baseline gap-3 px-4 pt-4 pb-2">
+        <h1 className="font-display text-[22px] font-bold tracking-tight text-foreground">
+          Quote Calculator
+        </h1>
+        <span className="font-mono text-[11px] text-muted-foreground">
+          test invoice · priced against the client's active plan · nothing is saved
+        </span>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-auto p-4">
+        <div className="flex flex-col gap-4 lg:flex-row">
+          {/* ---------------------------------------------------- inputs */}
+          <div className="min-w-0 flex-1 flex-col gap-4">
+            <div className="rounded-xl border bg-card p-4">
+              <div className="grid grid-cols-2 gap-4">
+                <Labeled label="Client *">
+                  <Select
+                    placeholder="Select a client"
+                    value={clientId}
+                    onChange={(e) => setClientId(e.target.value)}
+                    options={(clients.data ?? []).map((c) => ({ value: c.id, label: c.name }))}
+                  />
+                </Labeled>
+                <Labeled label="Distance (km)">
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.1}
+                    align="right"
+                    prepend="km"
+                    value={distanceKm}
+                    onChange={(e) => setDistanceKm(e.target.value)}
+                  />
+                </Labeled>
+                <Labeled label="Service level">
+                  <Select
+                    placeholder="—"
+                    value={serviceLevelId}
+                    onChange={(e) => setServiceLevelId(e.target.value)}
+                    options={activeLevels.map((l) => ({ value: l.id, label: l.name }))}
+                  />
+                </Labeled>
+              </div>
+            </div>
+
+            <div className="mt-4 rounded-xl border bg-card">
+              <div className="border-b bg-muted px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                Additional services
+              </div>
+              {activeServices.length === 0 ? (
+                <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+                  No additional services yet.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-2 p-4">
+                  {activeServices.map((s) => {
+                    const on = serviceIds.includes(s.id);
+                    return (
+                      <button
+                        key={s.id}
+                        type="button"
+                        onClick={() => toggleService(s.id)}
+                        aria-pressed={on}
+                        className={cn(
+                          'rounded-full border px-3 py-1.5 text-sm',
+                          on
+                            ? 'border-primary bg-accent text-primary'
+                            : 'border-border text-muted-foreground hover:text-foreground',
+                        )}
+                      >
+                        {on ? '● ' : '○ '}
+                        {s.name}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="mt-4 rounded-xl border bg-card">
+              <div className="grid grid-cols-[1fr_90px_40px] gap-2 border-b bg-muted px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                <span>Freight item</span>
+                <span className="text-right">Qty</span>
+                <span />
+              </div>
+              {lines.map((l, i) => (
+                <div
+                  key={`${l.id}-${i}`}
+                  className="grid grid-cols-[1fr_90px_40px] items-center gap-2 border-b px-4 py-2 last:border-b-0"
+                >
+                  <Select
+                    value={l.id}
+                    onChange={(e) => updateLine(i, { id: e.target.value })}
+                    options={activeFreight.map((f) => ({ value: f.id, label: f.name }))}
+                  />
+                  <Input
+                    type="number"
+                    min={1}
+                    align="right"
+                    value={String(l.qty)}
+                    onChange={(e) => updateLine(i, { qty: Number(e.target.value) || 1 })}
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label="Remove line"
+                    onClick={() => removeLine(i)}
+                  >
+                    <Icon name="x" size={14} />
+                  </Button>
+                </div>
+              ))}
+              <div className="flex items-center gap-2 p-3">
+                <Button
+                  variant="utility"
+                  size="sm"
+                  onClick={addLine}
+                  disabled={activeFreight.length === 0}
+                  leadingIcon={<Icon name="plus" size={14} />}
+                >
+                  Add line
+                </Button>
+                <div className="flex-1" />
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={calculate}
+                  disabled={!clientId || busy}
+                >
+                  {busy ? 'Pricing…' : 'Calculate'}
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* ---------------------------------------------------- result */}
+          <aside className="w-full shrink-0 lg:w-[420px]">
+            <div className="overflow-hidden rounded-xl border bg-card shadow-[var(--elevation-1)]">
+              <div className="border-b bg-accent px-4 py-3 font-display text-[15px] font-bold tracking-tight text-foreground">
+                Test invoice
+              </div>
+
+              {failure ? (
+                <p className="px-4 py-10 text-center text-sm text-muted-foreground">{failure}</p>
+              ) : !result ? (
+                <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+                  Select a client and press Calculate.
+                </p>
+              ) : (
+                <>
+                  <div className="border-b px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                    {result.client.name} · {result.ratePlan.name} · {result.distanceKm} km
+                  </div>
+
+                  <div className="flex flex-col gap-2 p-4">
+                    {result.lines.map((l, i) => (
+                      <div key={`${l.kind}-${i}`} className="flex flex-col gap-0.5">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <span className="min-w-0 flex-1 text-sm text-body">{l.label}</span>
+                          <span className="font-mono text-[13px] tabular-nums text-foreground">
+                            {money(l.amount)}
+                          </span>
+                        </div>
+                        {l.note && (
+                          <span className="font-mono text-[10px] text-muted-foreground">
+                            {l.note}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-col gap-1.5 border-t px-4 py-3">
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-sm font-medium text-foreground">Subtotal</span>
+                      <span className="font-mono text-[13px] tabular-nums text-foreground">
+                        {money(result.subtotal)}
+                      </span>
+                    </div>
+                    <div className="flex items-baseline justify-between">
+                      <span className="text-sm text-muted-foreground">{result.tax.label}</span>
+                      <span className="font-mono text-[13px] tabular-nums text-muted-foreground">
+                        {money(result.tax.amount)}
+                      </span>
+                    </div>
+                    <div className="mt-1 flex items-baseline justify-between border-t pt-2">
+                      <span className="font-display text-[15px] font-bold text-foreground">
+                        Grand Total
+                      </span>
+                      <span className="font-mono text-[15px] font-bold tabular-nums text-foreground">
+                        {money(result.total)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {result.warnings.length > 0 && (
+                    <div className="border-t bg-muted/40 px-4 py-3">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground">
+                        Warnings
+                      </p>
+                      <ul className="mt-1.5 flex flex-col gap-1">
+                        {result.warnings.map((w) => (
+                          <li key={w} className="text-xs text-muted-foreground">
+                            {w}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </aside>
+        </div>
+      </div>
     </div>
   );
 }

@@ -63,8 +63,8 @@ const withDriver = (id: string, over: Partial<MapPinDto> = {}) =>
   });
 
 const roster: MapDriverDto[] = [
-  { id: 'd1', name: 'Ahsan', code: 'DRV-1', active: true, onShift: true, colorIndex: 2, assignedCount: 3 },
-  { id: 'd2', name: 'Bilal', code: 'DRV-2', active: true, onShift: false, colorIndex: 5, assignedCount: 0 },
+  { id: 'd1', name: 'Ahsan', code: 'DRV-1', active: true, onShift: true, colorIndex: 2, assignedCount: 3, photoUrl: null },
+  { id: 'd2', name: 'Bilal', code: 'DRV-2', active: true, onShift: false, colorIndex: 5, assignedCount: 0, photoUrl: null },
 ];
 
 const run = (state: MapViewState, ...actions: MapViewAction[]) =>

@@ -1,4 +1,4 @@
-import { Icon, Input, Switch } from '@/ui';
+import { Checkbox, Icon, Input, Switch } from '@/ui';
 import type { ReactNode } from 'react';
 import type { MapDriverDto, MapPinDto } from '@/lib/api';
 import { TASK_TABS, type MapViewAction, type MapViewState, type TaskTab } from '../state/mapView';
@@ -60,6 +60,12 @@ export function MapSidebar({
 }: MapSidebarProps) {
   const { visible, hasMore, remaining, sentinel } = useIncrementalList(taskPins, 100);
 
+  // A Set for the per-row lookup; the reducer keeps an array because selection
+  // order matters to it, and 100 `includes` calls per render would not.
+  const selectedIds = new Set(state.selectedTaskIds);
+  const selectedHere = taskPins.reduce((n, p) => (selectedIds.has(p.id) ? n + 1 : n), 0);
+  const allSelected = taskPins.length > 0 && selectedHere === taskPins.length;
+
   return (
     <aside className="flex w-80 flex-none flex-col border-l bg-card">
       {/* TASKS | DRIVERS */}
@@ -118,6 +124,42 @@ export function MapSidebar({
             />
           </div>
 
+          {/*
+            * Select-all acts on `taskPins`, the whole filtered list — not on
+            * `visible`, which is the first 100 rows. Selecting a page and calling
+            * it "all" is the kind of thing nobody notices until a bulk assign
+            * misses half the work.
+            */}
+          <div className="flex flex-none items-center gap-2 border-b px-3 py-1.5">
+            <Checkbox
+              checked={allSelected}
+              disabled={taskPins.length === 0}
+              onChange={() =>
+                dispatch({
+                  type: 'SELECT_MANY',
+                  taskIds: allSelected ? [] : taskPins.map((p) => p.id),
+                  additive: false,
+                })
+              }
+              label={
+                <span className="text-xs text-muted-foreground">
+                  {selectedHere > 0
+                    ? `${selectedHere} of ${taskPins.length} selected`
+                    : `Select all ${taskPins.length}`}
+                </span>
+              }
+            />
+            {selectedHere > 0 && (
+              <button
+                type="button"
+                onClick={() => dispatch({ type: 'CLEAR_SELECTION' })}
+                className="ix-reset-btn ml-auto text-xs text-primary"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
           <div className="min-h-0 flex-1 overflow-y-auto">
             {loading && taskPins.length === 0 && (
               <p className="px-3 py-6 text-sm text-muted-foreground">Loading tasks…</p>
@@ -135,6 +177,8 @@ export function MapSidebar({
                 plotEnd={state.plotEnd}
                 borderColour={borderColourOf(pin)}
                 selected={pin.id === state.openTaskId}
+                checked={selectedIds.has(pin.id)}
+                onToggle={(taskId) => dispatch({ type: 'TOGGLE_ONE', taskId })}
                 onOpen={onOpenTask}
                 onAssign={onAssign}
                 onEdit={onEdit}

@@ -117,9 +117,11 @@ export function ItemModal({ open, editing, initial, onClose, onSaveClose, onSave
       }
     >
       <div className="flex flex-col gap-3">
+        {/* No item "Reference": `barcode` still round-trips on an item that
+            already has one, it is simply not typed here any more. */}
         <div className="flex gap-3">
-          <Field label="Reference">
-            <Input placeholder="Client reference" {...text('barcode')} />
+          <Field label="Description" required error={errors.description?.message}>
+            <Input placeholder="Item description" {...text('description')} />
           </Field>
           <Field label="Qty" required grow={false} error={errors.qty?.message}>
             {/* min=1 stops the browser's spinner going negative; the schema is
@@ -127,10 +129,6 @@ export function ItemModal({ open, editing, initial, onClose, onSaveClose, onSave
             <Input type="number" min={1} step={1} align="right" className="w-24" {...text('qty')} />
           </Field>
         </div>
-
-        <Field label="Description" required grow={false} error={errors.description?.message}>
-          <Input placeholder="Item description" {...text('description')} />
-        </Field>
 
         <div className="flex gap-3">
           <Field label="Total Weight (lb)" error={errors.weightLb?.message}>

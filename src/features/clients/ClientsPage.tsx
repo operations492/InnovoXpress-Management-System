@@ -21,7 +21,7 @@ import { useClientActions } from './hooks/useClientActions';
  * Clients — admin only.
  *
  * A client is a name, a frozen-once-used code, an active flag and an optional
- * default pickup address. The address is the point of the screen: it is what a
+ * billing address. The address is the point of the screen: it is what a
  * consignment copies into its sender snapshot, which is why a client without one
  * says so plainly in its own column rather than showing an empty cell.
  */
@@ -61,7 +61,7 @@ export function ClientsPage() {
       },
       {
         key: 'address',
-        header: 'Default pickup address',
+        header: 'Billing address',
         render: (c) => {
           const line = addressLine(c);
           return line ? (

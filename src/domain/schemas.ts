@@ -72,7 +72,7 @@ export const taskFormSchema = z.object({
   priority: priorityEnum,
   externalId: z.string().trim().max(64),
   merchant: z.string(),
-  /** A service_levels row id, or '' for none. The API validates it, not the form. */
+  /** A service_levels row id. Required on create; the API validates the id itself. */
   serviceLevelId: z.string(),
   description: z.string(),
 
@@ -175,6 +175,9 @@ export const NO_CLIENT = 'Client not selected';
 export function missingRequired(v: TaskFormValues): string[] {
   const missing: string[] = [];
   if (!v.merchant || v.merchant === NO_CLIENT) missing.push('Client');
+  // Required on create only: this runs for the new-order card, not the edit
+  // modal, so an older order saved without a level can still be edited.
+  if (!v.serviceLevelId) missing.push('Service level');
   if (!v.requester.trim()) missing.push('Sender name');
   if (!v.dispatchAddress.trim()) missing.push('Pickup address');
   // City is set inside the address picker, never typed in the form — so name the
@@ -241,7 +244,7 @@ const dimension = (label: string) =>
  * item schema: qty >= 1, weightLb >= 0, and each dimension > 0 when given.
  */
 export const itemFormSchema = z.object({
-  /** The client's line reference — the "Reference" column. */
+  /** The client's line reference. No longer typed in the UI; kept so an item that has one round-trips. */
   barcode: z.string(),
   description: z.string().trim().min(1, 'Description is required'),
   qty: z

@@ -80,6 +80,7 @@ describe('consignment required fields', () => {
   it('lists everything missing on an empty form', () => {
     expect(missingRequired(EMPTY_TASK_FORM)).toEqual([
       'Client',
+      'Service level',
       'Sender name',
       'Pickup address',
       'Pickup city (open the address picker)',
@@ -91,11 +92,12 @@ describe('consignment required fields', () => {
     ]);
   });
 
-  it('is satisfied once all nine are supplied', () => {
+  it('is satisfied once all ten are supplied', () => {
     expect(
       missingRequired({
         ...EMPTY_TASK_FORM,
         merchant: 'Daraz',
+        serviceLevelId: 'sl-express',
         requester: 'Sender A',
         dispatchAddress: 'Warehouse 4',
         dispatchCity: 'Mississauga',
@@ -116,6 +118,7 @@ describe('consignment required fields', () => {
     const missing = missingRequired({
       ...EMPTY_TASK_FORM,
       merchant: 'Daraz',
+      serviceLevelId: 'sl-express',
       requester: 'Sender A',
       dispatchAddress: 'Some lane the geocoder has never heard of',
       dispatchCity: 'Mississauga',

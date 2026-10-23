@@ -16,6 +16,12 @@ interface TaskWidgetProps {
   onEdit: (taskId: string) => void;
   onAssign: (taskId: string) => void;
   onSelectSibling: (taskId: string) => void;
+  /**
+   * The assigned driver’s own photo, looked up from the roster by MapPage.
+   * Not carried on the pin itself: /pins returns hundreds of tasks and would
+   * repeat the same driver, signing a URL per row.
+   */
+  driverPhotoUrl?: string | null;
 }
 
 function timeWindow(pickupAfter: string | null, deliverBefore: string | null): string {
@@ -92,6 +98,7 @@ export function TaskWidget({
   onEdit,
   onAssign,
   onSelectSibling,
+  driverPhotoUrl,
 }: TaskWidgetProps) {
   const others = siblings.filter((s) => s.id !== pin.id);
   // The API refuses edits once a run has started, so the button is hidden
@@ -118,9 +125,9 @@ export function TaskWidget({
 
       <div className="mb-3 flex justify-center">
         {pin.driver ? (
-          <Avatar name={pin.driver.name} size={44} />
+          <Avatar name={pin.driver.name} src={driverPhotoUrl ?? null} size={44} />
         ) : (
-          // No driver photos exist in the schema, so this is the placeholder the
+          // Nobody is assigned yet, so this is the placeholder the
           // spec asks for when a task is unassigned.
           <span className="flex size-11 items-center justify-center rounded-full border border-dashed text-muted-foreground">
             <Icon name="user" size={20} />

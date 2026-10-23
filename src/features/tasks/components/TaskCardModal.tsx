@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Button, Card, Checkbox, Icon, Modal, Popover, StatusChip, Tabs } from '@/ui';
+import { Button, Card, Icon, Modal, Popover, StatusChip, Tabs } from '@/ui';
 import { cn } from '@/lib/utils';
 import { taskFormSchema } from '@/domain/schemas';
 import type { TaskFormValues } from '@/domain/schemas';
@@ -18,6 +18,9 @@ import { useToast } from '@/components/Toast';
 import { useItemsEditor } from '../hooks/useItemsEditor';
 import { TaskForm } from './TaskForm';
 import { ItemsEditor } from './ItemsEditor';
+import { OrderDocumentsCard } from './OrderDocumentsCard';
+import { api } from '@/lib/api';
+import { printDocument } from '@/lib/print';
 import { ItemModal } from './ItemModal';
 import { useClients } from '@/store/TasksProvider';
 
@@ -82,7 +85,10 @@ export function TaskCardModal({ open, task, onClose, onSave, onChangeStatus, onD
       width={700}
       title={
         <span className="inline-flex items-center gap-2.5">
-          Task {task.id}
+          {/* The client's own reference, never the database id — that is noise to
+              an operator and it is not what anyone quotes on the phone. Falls back
+              to the generated consignment number when the client gave no ref. */}
+          {task.externalId ? `Ref ${task.externalId}` : task.orderNo || 'New task'}
           <StatusChip status={task.status} />
         </span>
       }
@@ -114,12 +120,18 @@ export function TaskCardModal({ open, task, onClose, onSave, onChangeStatus, onD
                 <button className="ix-reset-btn ix-menu-item" onClick={() => { setMoreOpen(false); flash('Tracking link copied'); }}>
                   <Icon name="map" size={15} /> Show Tracking Link
                 </button>
-                <button className="ix-reset-btn ix-menu-item" onClick={() => { setMoreOpen(false); flash('Shipping label generated'); }}>
+                <button className="ix-reset-btn ix-menu-item" onClick={() => { setMoreOpen(false); printDocument(() => api.labelPdf(task.id), flash); }}>
                   <Icon name="receipt" size={15} /> Shipping Label
                 </button>
-                <button className="ix-reset-btn ix-menu-item" onClick={() => { setMoreOpen(false); flash('Delivery docket generated'); }}>
+                <button className="ix-reset-btn ix-menu-item" onClick={() => { setMoreOpen(false); printDocument(() => api.docketPdf(task.id), flash); }}>
                   <Icon name="note" size={15} /> Delivery Docket
                 </button>
+                {/* Only once delivered — the endpoint is a 409 until then. */}
+                {task.status === 'DELIVERED' && (
+                  <button className="ix-reset-btn ix-menu-item" onClick={() => { setMoreOpen(false); printDocument(() => api.podReportPdf(task.id), flash); }}>
+                    <Icon name="camera" size={15} /> POD Report
+                  </button>
+                )}
                 <div className="my-1 border-t" />
                 <button className="ix-reset-btn ix-menu-item" onClick={() => { setMoreOpen(false); onChangeStatus(task.id); }}>
                   <Icon name="refresh" size={15} /> Change Status
@@ -156,24 +168,7 @@ export function TaskCardModal({ open, task, onClose, onSave, onChangeStatus, onD
         />
       )}
 
-      {tab === 'attachments' && (
-        <div className="flex flex-col gap-3">
-          <div className="flex gap-3">
-            {[0, 1].map((i) => (
-              <div
-                key={i}
-                className="flex h-[90px] w-[120px] items-center justify-center rounded-md border bg-muted text-muted-foreground"
-              >
-                <Icon name="camera" size={20} />
-              </div>
-            ))}
-          </div>
-          <Checkbox label="Visible to driver" checked onChange={() => undefined} />
-          <Button size="sm" variant="utility" leadingIcon={<Icon name="upload" size={14} />}>
-            Add Attachment (JPG, PNG, PDF)
-          </Button>
-        </div>
-      )}
+      {tab === 'attachments' && <OrderDocumentsCard consignmentId={task.id} />}
 
       {tab === 'invoice' && (
         <div>

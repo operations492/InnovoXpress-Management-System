@@ -9,14 +9,16 @@ import { useState } from 'react';
 import { Button, Icon, Input, Modal } from '@/ui';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/components/Toast';
-import { nowLabel } from '@/domain/format';
-import type { FreightItemInput } from '@/domain/freight';
+import type { FreightItemPatch } from '@/domain/freight';
 import { useFreightItemsStore } from '@/store/FreightItemsProvider';
 import { FreightItemDetailPanel } from './components/FreightItemDetailPanel';
 
-const CURRENT_USER = 'Operations';
-const GRID = 'grid grid-cols-[1fr_70px_120px] gap-2';
-const Dash = () => <span className="text-muted-foreground">—</span>;
+const GRID = 'grid grid-cols-[1fr_92px] gap-2';
+
+/** ApiError carries a server message; anything else is unknown. */
+function reason(e: unknown): string {
+  return e instanceof Error ? e.message : 'Unknown error';
+}
 
 export function FreightItemsPage() {
   const store = useFreightItemsStore();
@@ -28,40 +30,44 @@ export function FreightItemsPage() {
 
   const selected = store.items.find((f) => f.id === selectedId) ?? null;
   const mode = selected ? 'edit' : 'empty';
-  const enabledCount = store.items.filter((f) => f.enabled).length;
+  const enabledCount = store.items.filter((f) => f.active).length;
 
   const openNew = () => {
     setNewName('');
     setNamingNew(true);
   };
-  const createItem = () => {
+  const createItem = async () => {
     const name = newName.trim();
     if (!name) return;
-    const created = store.add({
-      name,
-      shortName: '',
-      priority: null,
-      aka: '',
-      labelPrintQty: 1,
-      enabled: true,
-      createdBy: CURRENT_USER,
-      createdAt: nowLabel(),
-    });
-    setSelectedId(created.id);
-    setNamingNew(false);
-    flash('Freight item created — set its details');
+    try {
+      const created = await store.create({ name });
+      setSelectedId(created.id);
+      setNamingNew(false);
+      flash(`${created.name} created`);
+    } catch (e) {
+      flash(`Could not create freight item: ${reason(e)}`);
+    }
   };
 
-  const submit = (patch: Partial<FreightItemInput>) => {
+  const submit = async (patch: FreightItemPatch) => {
     if (!selectedId) return;
-    store.update(selectedId, patch);
-    flash('Freight item updated');
+    try {
+      const saved = await store.update(selectedId, patch);
+      const verb = patch.active === false ? 'disabled' : patch.active === true ? 'enabled' : 'saved';
+      flash(`${saved.name} ${verb}`);
+    } catch (e) {
+      flash(`Could not save freight item: ${reason(e)}`);
+    }
   };
-  const remove = () => {
+  const remove = async () => {
     if (!selectedId) return;
-    store.remove(selectedId);
-    setSelectedId(null);
-    flash('Freight item deleted');
+    try {
+      await store.remove(selectedId);
+      setSelectedId(null);
+      flash('Freight item deleted');
+    } catch (e) {
+      flash(`Could not delete freight item: ${reason(e)}`);
+    }
   };
 
   return (
@@ -89,8 +95,7 @@ export function FreightItemsPage() {
           <div className="overflow-hidden rounded-xl border bg-card">
             <div className={cn(GRID, 'border-b bg-muted px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground')}>
               <span>Freight item</span>
-              <span className="text-right">Priority</span>
-              <span>Created by</span>
+              <span className="text-right">Status</span>
             </div>
 
             {store.items.length === 0 ? (
@@ -116,16 +121,20 @@ export function FreightItemsPage() {
                     <span
                       className={cn(
                         'pointer-events-none z-10 truncate text-sm',
-                        f.enabled ? 'font-medium text-foreground' : 'text-muted-foreground line-through',
+                        f.active ? 'font-medium text-foreground' : 'text-muted-foreground line-through',
                         isSel && 'text-primary',
                       )}
                     >
                       {f.name}
                     </span>
-                    <span className="pointer-events-none z-10 text-right font-mono text-[13px] tabular-nums text-foreground">
-                      {f.priority == null ? <Dash /> : f.priority}
+                    <span
+                      className={cn(
+                        'pointer-events-none z-10 text-right font-mono text-[10px] uppercase tracking-wide',
+                        f.active ? 'text-primary' : 'text-muted-foreground',
+                      )}
+                    >
+                      {f.active ? 'Enabled' : 'Disabled'}
                     </span>
-                    <span className="pointer-events-none z-10 truncate text-sm text-muted-foreground">{f.createdBy}</span>
                   </div>
                 );
               })

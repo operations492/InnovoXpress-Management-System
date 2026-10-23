@@ -15,7 +15,7 @@ import { clientFormSchema, EMPTY_CLIENT_FORM, hasAddress, type ClientFormValues 
  * Create or edit a client.
  *
  * The address is edited through the same picker the consignment form uses, so a
- * client's pickup address is pinned exactly the way an order's is — and for the
+ * client's billing address is pinned exactly the way an order's is — and for the
  * same reason: the coordinate is what routing runs on. The picker owns line 1,
  * city, province and postcode; the four fields it has no notion of (contact,
  * phone, email, instructions) sit beside it and travel in the same value object.
@@ -158,7 +158,7 @@ export function ClientFormDialog({
         </Section>
 
         <Section
-          title="Default pickup address"
+          title="Billing address"
           action={
             hasAddress(v) ? (
               <button
@@ -176,7 +176,7 @@ export function ClientFormDialog({
           </p>
 
           <AddressField
-            label="Pickup address"
+            label="Billing address"
             tone="pickup"
             value={{
               line1: v.line1,

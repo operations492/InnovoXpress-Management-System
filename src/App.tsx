@@ -3,6 +3,7 @@ import { ConsoleLayout } from '@/layouts/ConsoleLayout';
 import { TasksPage } from '@/features/tasks/TasksPage';
 import { UsersPage } from '@/features/users/UsersPage';
 import { ClientsPage } from '@/features/clients/ClientsPage';
+import { DriversPage } from '@/features/drivers/DriversPage';
 import { ChatPage } from '@/features/chat/ChatPage';
 import { MapPage } from '@/features/map/MapPage';
 import { AdditionalServicesPage } from '@/features/finance/AdditionalServicesPage';
@@ -14,7 +15,7 @@ import { ZoneMapPage } from '@/features/finance/ZoneMapPage';
 import { TaxRatesPage } from '@/features/finance/TaxRatesPage';
 import { RateLeviesPage } from '@/features/finance/RateLeviesPage';
 import { RatePlansPage } from '@/features/finance/RatePlansPage';
-import { RateVersionBuilderPage } from '@/features/finance/RateVersionBuilderPage';
+import { RatePlanEditorPage } from '@/features/finance/RatePlanEditorPage';
 import { QuoteCalculatorPage } from '@/features/finance/QuoteCalculatorPage';
 
 export default function App() {
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="/tasks" element={<TasksPage />} />
         <Route path="/users" element={<UsersPage />} />
         <Route path="/clients" element={<ClientsPage />} />
+        <Route path="/drivers" element={<DriversPage />} />
         <Route path="/chat" element={<ChatPage />} />
         <Route path="/map" element={<MapPage />} />
         <Route path="/finance/additional-services" element={<AdditionalServicesPage />} />
@@ -35,7 +37,7 @@ export default function App() {
         <Route path="/finance/tax-rates" element={<TaxRatesPage />} />
         <Route path="/finance/rate-levies" element={<RateLeviesPage />} />
         <Route path="/finance/rate-plans" element={<RatePlansPage />} />
-        <Route path="/finance/rate-plans/:planId/build/:versionId" element={<RateVersionBuilderPage />} />
+        <Route path="/finance/rate-plans/:planId" element={<RatePlanEditorPage />} />
         <Route path="/finance/quote" element={<QuoteCalculatorPage />} />
         <Route path="*" element={<Navigate to="/tasks" replace />} />
       </Route>

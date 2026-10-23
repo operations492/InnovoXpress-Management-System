@@ -7,6 +7,7 @@ import { AuthProvider } from '@/state/AuthProvider';
 import { TasksProvider } from '@/store/TasksProvider';
 import { UsersProvider } from '@/store/UsersProvider';
 import { ClientsProvider } from '@/store/ClientsProvider';
+import { DriversProvider } from '@/store/DriversProvider';
 import { ChatProvider } from '@/store/ChatProvider';
 import { DispatchRealtimeProvider } from '@/store/DispatchRealtimeProvider';
 import { AdditionalServicesProvider } from '@/store/AdditionalServicesProvider';
@@ -53,6 +54,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
               <DispatchRealtimeProvider>
                 <UsersProvider>
                   <ClientsProvider>
+                    <DriversProvider>
                   <TasksProvider>
                     <AdditionalServicesProvider>
                       <FreightItemsProvider>
@@ -68,6 +70,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
                       </FreightItemsProvider>
                     </AdditionalServicesProvider>
                   </TasksProvider>
+                    </DriversProvider>
                   </ClientsProvider>
                 </UsersProvider>
               </DispatchRealtimeProvider>

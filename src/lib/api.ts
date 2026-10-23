@@ -49,7 +49,11 @@ async function ensureToken(): Promise<string> {
 
 /* ---------------------------------------------------------------------- fetch */
 
-async function request<T>(path: string, init: RequestInit = {}, retryOn401 = true): Promise<T> {
+async function rawRequest(
+  path: string,
+  init: RequestInit = {},
+  retryOn401 = true,
+): Promise<Response> {
   const jwt = await ensureToken();
 
   const res = await fetch(`${BASE}${path}`, {
@@ -71,7 +75,7 @@ async function request<T>(path: string, init: RequestInit = {}, retryOn401 = tru
   // real problem behind a wasted round trip.
   if (res.status === 401 && retryOn401) {
     const { data, error } = await supabase.auth.refreshSession();
-    if (!error && data.session) return request<T>(path, init, false);
+    if (!error && data.session) return rawRequest(path, init, false);
 
     // The session is genuinely gone. Sign out so the app falls back to the
     // login screen rather than looping on 401s.
@@ -89,9 +93,22 @@ async function request<T>(path: string, init: RequestInit = {}, retryOn401 = tru
     );
   }
 
+  return res;
+}
+
+/**
+ * JSON callers. Everything auth-shaped — the token, the single 401 refresh, the
+ * error envelope — stays in `rawRequest`, so a non-JSON response can reuse it
+ * rather than grow a second copy of that logic.
+ */
+async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const res = await rawRequest(path, init);
   if (res.status === 204) return undefined as T;
   return (await res.json()) as T;
 }
+
+/** PDFs and other binaries: same auth path, no JSON parse. */
+const getBlob = async (path: string): Promise<Blob> => (await rawRequest(path)).blob();
 
 const get = <T,>(path: string) => request<T>(path);
 const post = <T,>(path: string, body?: unknown) =>
@@ -200,11 +217,18 @@ export interface DriverDto {
   mobile: string | null;
   active: boolean;
   activeLoad: number;
+  email: string | null;
+  onShift: boolean;
+  shiftStartedAt: string | null;
+  /** Null exactly while a shift is open; otherwise when the last one closed. */
+  shiftEndedAt: string | null;
+  /** Short-lived signed link, null until a photo is uploaded. */
+  photoUrl: string | null;
 }
 
 export interface ItemDto {
   id: string;
-  /** The client's line reference — the "Reference" column. */
+  /** The client's line reference. No longer typed in the UI; kept so an item that has one round-trips. */
   barcode: string | null;
   description: string;
   qty: number;
@@ -338,6 +362,66 @@ export interface PodLegDto {
   /** Set when an admin swapped the files after the fact. */
   replacedAt: string | null;
   expiresInSeconds: number;
+}
+
+/** The two kinds of paperwork an order can carry. */
+export type OrderDocumentKind = 'RELEASE_LETTER' | 'BILL_OF_LADING';
+
+/** URL slug per kind — the API routes on these, not on the enum. */
+export const DOC_SLUGS: Record<OrderDocumentKind, string> = {
+  RELEASE_LETTER: 'release-letter',
+  BILL_OF_LADING: 'bill-of-lading',
+};
+
+export interface OrderDocSignatureDto {
+  leg: 'PICKUP' | 'DELIVERY';
+  capturedAt: string;
+  /** Short-lived signed links, both null-safe. */
+  signatureUrl: string | null;
+  /**
+   * The document with the signature appended. Null when the original could not
+   * be parsed (an encrypted PDF, a WebP scan) — the signature still counts.
+   */
+  signedUrl: string | null;
+}
+
+export interface OrderDocumentDto {
+  kind: OrderDocumentKind;
+  label: string;
+  mime: string;
+  bytes: number;
+  url: string | null;
+  showAtPickup: boolean;
+  showAtDelivery: boolean;
+  signAtPickup: boolean;
+  signAtDelivery: boolean;
+  createdAt: string;
+  signatures: OrderDocSignatureDto[];
+}
+
+/** GET/POST/PATCH/DELETE /api/consignments/:id/documents[/:kind]. */
+export interface OrderDocumentsDto {
+  consignmentId: string;
+  leg: 'PICKUP' | 'DELIVERY' | null;
+  documents: OrderDocumentDto[];
+}
+
+export interface OrderDocFlags {
+  showAtPickup?: boolean;
+  showAtDelivery?: boolean;
+  signAtPickup?: boolean;
+  signAtDelivery?: boolean;
+}
+
+/**
+ * DEPRECATED — the single release letter. Still served, from the same table, so
+ * the deployed driver build keeps working. New code uses `orderDocuments`.
+ */
+export interface ReleaseLetterDto {
+  consignmentId: string;
+  hasReleaseLetter: boolean;
+  /** A SHORT-LIVED signed link, null when nothing is on file. */
+  releaseLetterUrl: string | null;
 }
 
 /** One driver's newest position — GET /api/drivers/locations/latest. */
@@ -564,6 +648,8 @@ export interface MapDriverDto {
   /** Index into the shared 8-colour palette; see domain/serviceZone.ts. */
   colorIndex: number;
   assignedCount: number;
+  /** Short-lived signed link, null until a photo is uploaded. */
+  photoUrl: string | null;
 }
 
 /**
@@ -588,7 +674,7 @@ export interface NearestDriverDto {
   staleSeconds: number | null;
   /** Road seconds. Null in the straight-line fallback, or if unreachable. */
   durationS: number | null;
-  /** Road metres from OSRM, or straight-line metres in the fallback. */
+  /** Road metres from the routing engine, or straight-line metres in the fallback. */
   distanceM: number | null;
   /** False when the driver is assignable but has reported no position. */
   ranked: boolean;
@@ -601,7 +687,7 @@ export interface NearestDriversResponse {
     orderNo: string;
     pickup: { lat: number; lng: number; line1: string; province: string | null; city: string };
     /** What the numbers mean. `straight-line` = the routing engine was unreachable. */
-    source: 'osrm' | 'straight-line' | 'none';
+    source: 'engine' | 'straight-line' | 'none';
     warning: string | null;
     withinMinutes: number;
     rankedCount: number;
@@ -746,6 +832,42 @@ export const api = {
 
   deleteClient: (id: string) => del<void>(`/api/clients/${id}`),
 
+  // --- catalogues the rate plan prices -------------------------------------
+  // --- rate plans and the quote calculator ---------------------------------
+  listRatePlans: (params: { clientId?: string; includeInactive?: boolean } = {}) => {
+    const q = new URLSearchParams();
+    if (params.clientId) q.set('clientId', params.clientId);
+    if (params.includeInactive) q.set('includeInactive', 'true');
+    const qs = q.toString();
+    return get<RatePlanDto[]>(`/api/rate-plans${qs ? `?${qs}` : ''}`);
+  },
+  getRatePlan: (id: string) => get<RatePlanDetailDto>(`/api/rate-plans/${id}`),
+  createRatePlan: (body: CreateRatePlanPayload) => post<RatePlanDto>('/api/rate-plans', body),
+  updateRatePlan: (id: string, body: UpdateRatePlanPayload) =>
+    patch<RatePlanDto>(`/api/rate-plans/${id}`, body),
+  setRatePlanItems: (id: string, body: SetRatePlanItemsPayload) =>
+    put<RatePlanDetailDto>(`/api/rate-plans/${id}/items`, body),
+  deleteRatePlan: (id: string) => del<void>(`/api/rate-plans/${id}`),
+
+  previewInvoice: (body: InvoicePreviewPayload) =>
+    post<InvoicePreviewDto>('/api/invoices/preview', body),
+
+  listAdditionalServices: (params: { includeInactive?: boolean } = {}) =>
+    get<AdditionalServiceDto[]>(`/api/additional-services${params.includeInactive ? '?includeInactive=true' : ''}`),
+  createAdditionalService: (body: CreateAdditionalServicePayload) =>
+    post<AdditionalServiceDto>('/api/additional-services', body),
+  updateAdditionalService: (id: string, body: UpdateAdditionalServicePayload) =>
+    patch<AdditionalServiceDto>(`/api/additional-services/${id}`, body),
+  deleteAdditionalService: (id: string) => del<void>(`/api/additional-services/${id}`),
+
+  listFreightItems: (params: { includeInactive?: boolean } = {}) =>
+    get<FreightItemDto[]>(`/api/freight-items${params.includeInactive ? '?includeInactive=true' : ''}`),
+  createFreightItem: (body: CreateFreightItemPayload) =>
+    post<FreightItemDto>('/api/freight-items', body),
+  updateFreightItem: (id: string, body: UpdateFreightItemPayload) =>
+    patch<FreightItemDto>(`/api/freight-items/${id}`, body),
+  deleteFreightItem: (id: string) => del<void>(`/api/freight-items/${id}`),
+
   listServiceLevels: (params: { includeInactive?: boolean } = {}) =>
     get<ServiceLevelDto[]>(`/api/service-levels${params.includeInactive ? '?includeInactive=true' : ''}`),
 
@@ -799,6 +921,29 @@ export const api = {
       `/api/consignments/${id}/nearest-drivers${q ? `?${q}` : ''}`,
     );
   },
+
+  getDriver: (id: string) => get<DriverDetailDto>(`/api/drivers/${id}`),
+
+  createDriver: (body: CreateDriverPayload) => post<DriverDetailDto>('/api/drivers', body),
+
+  updateDriver: (id: string, body: UpdateDriverPayload) =>
+    patch<DriverDetailDto>(`/api/drivers/${id}`, body),
+
+  /** 409 once the driver has any consignment or proof — deactivate instead. */
+  deleteDriver: (id: string) => del<{ deleted: boolean }>(`/api/drivers/${id}`),
+
+  driverDocuments: (id: string) => get<DriverDocumentsDto>(`/api/drivers/${id}/documents`),
+
+  /** Multipart. `post` passes FormData straight through instead of JSON-encoding it. */
+  uploadDriverDocument: (id: string, kind: DriverDocKind, file: File) => {
+    const body = new FormData();
+    body.append('file', file);
+    return post<DriverDocumentsDto>(`/api/drivers/${id}/documents/${kind}`, body);
+  },
+
+  /** Roster rows with no login yet — the picker when creating a driver account. */
+  listUnlinkedDrivers: () =>
+    get<{ data: UnlinkedDriverDto[] }>('/api/users/unlinked-drivers'),
 
   listDrivers: (params: { q?: string; includeInactive?: string } = {}) => {
     const qs = new URLSearchParams();
@@ -861,6 +1006,60 @@ export const api = {
    * fresh on every call and expire in minutes, so they cannot be cached.
    */
   getPod: (id: string) => get<{ proof: PodLegDto[] }>(`/api/consignments/${id}/pod`),
+
+  /**
+   * The order's release letter. Always 200 — `releaseLetterUrl` is null when
+   * nothing has been attached, which is the normal case. The url is signed and
+   * expires in minutes, so it cannot be cached.
+   */
+  /**
+   * An order's paperwork and how it is configured. The urls are signed and expire
+   * in minutes, so this is never served from cache.
+   */
+  orderDocuments: (id: string) => get<OrderDocumentsDto>(`/api/consignments/${id}/documents`),
+
+  /** Multipart, field `file`. Replaces the file but keeps the flags and signatures. */
+  uploadOrderDocument: (id: string, kind: OrderDocumentKind, file: File) => {
+    const body = new FormData();
+    body.append('file', file);
+    return post<OrderDocumentsDto>(`/api/consignments/${id}/documents/${DOC_SLUGS[kind]}`, body);
+  },
+
+  /**
+   * One or more flags. Omitted flags keep their stored value, and a sign flag
+   * forces the matching show flag on, server-side.
+   */
+  setOrderDocumentFlags: (id: string, kind: OrderDocumentKind, flags: OrderDocFlags) =>
+    patch<OrderDocumentsDto>(`/api/consignments/${id}/documents/${DOC_SLUGS[kind]}`, flags),
+
+  deleteOrderDocument: (id: string, kind: OrderDocumentKind) =>
+    del<OrderDocumentsDto>(`/api/consignments/${id}/documents/${DOC_SLUGS[kind]}`),
+
+  /** @deprecated use `orderDocuments` — there are two kinds of document now. */
+  releaseLetter: (id: string) => get<ReleaseLetterDto>(`/api/consignments/${id}/release-letter`),
+
+  /** Multipart. Replaces whatever was there; the server sniffs the real bytes. */
+  uploadReleaseLetter: (id: string, file: File) => {
+    const body = new FormData();
+    body.append('file', file);
+    return post<ReleaseLetterDto>(`/api/consignments/${id}/release-letter`, body);
+  },
+
+  deleteReleaseLetter: (id: string) =>
+    del<ReleaseLetterDto>(`/api/consignments/${id}/release-letter`),
+
+  /**
+   * The printable paperwork, as two separate PDFs — one set of 4x6 labels, one
+   * two-up A4 docket. They print on different machines, so they are never one
+   * combined file.
+   */
+  labelPdf: (id: string) => getBlob(`/api/consignments/${id}/label.pdf`),
+  docketPdf: (id: string) => getBlob(`/api/consignments/${id}/docket.pdf`),
+  /**
+   * The proof report. 409 until the order is delivered, which is why the console
+   * only offers it on a delivered order.
+   */
+  podReportPdf: (id: string) => getBlob(`/api/consignments/${id}/pod-report.pdf`),
 
   /**
    * Newest position per driver. The backend only looks back 60 minutes, so a
@@ -950,3 +1149,190 @@ export const api = {
 
   mapDrivers: () => get<{ data: MapDriverDto[] }>('/api/map/drivers'),
 };
+
+
+/* --- catalogues ----------------------------------------------------------
+ * Additional services and freight items are flat admin-managed lists, the same
+ * shape as service levels. The rate plan is what attaches a price to them, so
+ * no rate lives on the entry itself.
+ */
+export interface AdditionalServiceDto {
+  id: string;
+  name: string;
+  active: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface CreateAdditionalServicePayload {
+  name: string;
+  sortOrder?: number;
+}
+export interface UpdateAdditionalServicePayload {
+  name?: string;
+  sortOrder?: number;
+  active?: boolean;
+}
+
+export interface FreightItemDto {
+  id: string;
+  name: string;
+  active: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+export interface CreateFreightItemPayload {
+  name: string;
+  sortOrder?: number;
+}
+export interface UpdateFreightItemPayload {
+  name?: string;
+  sortOrder?: number;
+  active?: boolean;
+}
+
+/* --- rate plans ----------------------------------------------------------
+ * A plan is one client's price list. The base-rate fields are the first tab:
+ * baseRate covers includedKm, and each further blockKm costs blockRate. The
+ * editor pins blockKm to 1, so it is a per-km rate in practice. Blocks
+ * are charged whole. One plan per client may be active at a time.
+ */
+export interface RatePlanDto {
+  id: string;
+  clientId: string;
+  client: { id: string; name: string; code: string };
+  name: string;
+  active: boolean;
+  currency: string;
+  baseRate: number;
+  includedKm: number;
+  blockKm: number;
+  blockRate: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** One catalogue entry in the grid. `price: null` means not priced for this client. */
+export interface RatePlanPriceDto {
+  id: string;
+  name: string;
+  price: number | null;
+}
+
+/** GET /api/rate-plans/:id — the plan plus every active catalogue entry, priced or not. */
+export interface RatePlanDetailDto extends RatePlanDto {
+  serviceLevels: RatePlanPriceDto[];
+  additionalServices: RatePlanPriceDto[];
+  freightItems: RatePlanPriceDto[];
+}
+
+export interface CreateRatePlanPayload {
+  name: string;
+  clientId: string;
+  /** Defaults true; false drafts a replacement while the current plan stays live. */
+  active?: boolean;
+}
+
+export interface UpdateRatePlanPayload {
+  name?: string;
+  active?: boolean;
+  currency?: string;
+  baseRate?: number;
+  includedKm?: number;
+  blockKm?: number;
+  blockRate?: number;
+}
+
+/** The whole grid. Rows left out are not priced; a row at 0 is deliberately free. */
+export interface SetRatePlanItemsPayload {
+  items: Array<{
+    serviceLevelId?: string;
+    additionalServiceId?: string;
+    freightItemId?: string;
+    price: number;
+  }>;
+}
+
+/* --- quote calculator ----------------------------------------------------
+ * distanceKm is supplied by the operator, not derived: OSRM degrades to
+ * straight-line distance when unreachable, which is fine on a map and wrong on
+ * an invoice. Nothing is saved — this is a preview.
+ */
+export interface InvoicePreviewPayload {
+  clientId: string;
+  distanceKm: number;
+  serviceLevelId?: string;
+  additionalServiceIds?: string[];
+  freightItems?: Array<{ id: string; qty: number }>;
+}
+
+export interface InvoiceLineDto {
+  kind: 'BASE' | 'DISTANCE' | 'SERVICE_LEVEL' | 'ADDITIONAL_SERVICE' | 'FREIGHT_ITEM';
+  label: string;
+  qty?: number;
+  unitPrice?: number;
+  amount: number;
+  /** The arithmetic behind the line, e.g. how a distance rounded to whole blocks. */
+  note?: string;
+}
+
+export interface InvoicePreviewDto {
+  client: { id: string; name: string; code: string };
+  ratePlan: { id: string; name: string };
+  currency: string;
+  distanceKm: number;
+  basis: { baseRate: number; includedKm: number; blockKm: number; blockRate: number };
+  lines: InvoiceLineDto[];
+  subtotal: number;
+  tax: { label: string; rate: number; amount: number };
+  total: number;
+  /** Selected but unpriced entries, charged as 0 and called out. */
+  warnings: string[];
+  preview: true;
+}
+
+
+/* --- drivers --------------------------------------------------------------
+ * The Drivers tab owns the roster; /api/users owns logins. A driver row can have
+ * at most one login, linked by passing `driverId` when the account is created.
+ */
+export type DriverDocKind = 'photo' | 'id-card';
+
+export interface DriverDetailDto extends DriverDto {
+  /** The linked login, if one was ever created. */
+  login: { id: string; email: string } | null;
+  idCardUrl: string | null;
+  hasPhoto: boolean;
+  hasIdCard: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DriverDocumentsDto {
+  driverId: string;
+  photoUrl: string | null;
+  idCardUrl: string | null;
+}
+
+export interface CreateDriverPayload {
+  name: string;
+  code?: string;
+  mobile?: string;
+  email?: string;
+}
+
+export interface UpdateDriverPayload {
+  name?: string;
+  code?: string | null;
+  mobile?: string | null;
+  email?: string | null;
+  /** Deactivating also closes an open shift, server-side. */
+  active?: boolean;
+}
+
+export interface UnlinkedDriverDto {
+  id: string;
+  name: string;
+  code: string | null;
+}

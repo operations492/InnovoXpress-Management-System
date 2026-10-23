@@ -1,4 +1,6 @@
 import { useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '@/lib/api';
 import type { ChangeEvent, ReactNode } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -84,8 +86,7 @@ export function UserFormDialog({
             email: user.email,
             password: '',
             role: user.role,
-            driverCode: user.driver?.code ?? '',
-            driverMobile: '',
+            driverId: user.driver?.id ?? '',
           }
         : EMPTY_USER_FORM,
     );
@@ -97,6 +98,14 @@ export function UserFormDialog({
       setValue(name, e.target.value as never, { shouldDirty: true }),
   });
 
+  // Roster rows with no login yet. A driver row is created on the Drivers tab;
+  // this dialog only attaches a sign-in to one that already exists.
+  const unlinked = useQuery({
+    queryKey: ['users', 'unlinked-drivers'],
+    queryFn: () => api.listUnlinkedDrivers(),
+    enabled: open && mode === 'create',
+  });
+
   const submit = handleSubmit(async (values) => {
     if (mode === 'create') {
       const payload: CreateUserPayload = {
@@ -104,18 +113,10 @@ export function UserFormDialog({
         password: values.password,
         name: values.name.trim(),
         role: values.role,
-        // A driver IS the roster row — creating one creates both. There is no
-        // separate "link an existing driver" step; every driver account owns
-        // exactly one courier record.
-        ...(values.role === 'driver'
-          ? {
-              newDriver: {
-                name: values.name.trim(),
-                ...(values.driverCode ? { code: values.driverCode } : {}),
-                ...(values.driverMobile ? { mobile: values.driverMobile } : {}),
-              },
-            }
-          : {}),
+        // A login is attached to an existing roster row. The driver itself is
+        // created on the Drivers tab, because a courier record outlives any
+        // one account — people leave and their deliveries still name them.
+        ...(values.role === 'driver' ? { driverId: values.driverId } : {}),
       };
       await onCreate(payload);
     } else if (user) {
@@ -197,19 +198,27 @@ export function UserFormDialog({
         )}
 
         {v.role === 'driver' && mode === 'create' && (
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Driver code" error={errors.driverCode?.message}>
-              <Input placeholder="DRV-009" {...text('driverCode')} />
-            </Field>
-            <Field label="Mobile" error={errors.driverMobile?.message}>
-              <Input placeholder="+92 300 0000000" {...text('driverMobile')} />
-            </Field>
-          </div>
+          <Field label="Driver" error={errors.driverId?.message}>
+            <Select
+              placeholder={
+                unlinked.isPending
+                  ? 'Loading…'
+                  : (unlinked.data?.data.length ?? 0) === 0
+                    ? 'Every driver already has a login'
+                    : 'Select a driver'
+              }
+              {...text('driverId')}
+              options={(unlinked.data?.data ?? []).map((d) => ({
+                value: d.id,
+                label: d.code ? `${d.name} · ${d.code}` : d.name,
+              }))}
+            />
+          </Field>
         )}
 
         {v.role === 'driver' && mode === 'edit' && (
           <p className="text-[11.5px] text-muted-foreground">
-            Driver details (code, mobile) are part of the roster record and are not edited here.
+            Their name, code, mobile, photo and ID card live on the Drivers tab.
           </p>
         )}
       </div>

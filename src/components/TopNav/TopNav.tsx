@@ -27,7 +27,7 @@ const NAV: NavEntry[] = [
   { key: 'dashboard', label: 'Dashboard', icon: 'grid' },
   { key: 'consignments', label: 'Consignments', icon: 'package', path: '/tasks' },
   { key: 'allocation', label: 'Allocation', icon: 'map' },
-  { key: 'drivers', label: 'Drivers', icon: 'users' },
+  { key: 'drivers', label: 'Drivers', icon: 'users', path: '/drivers' },
   { key: 'clients', label: 'Clients', icon: 'building', path: '/clients', adminOnly: true },
   { key: 'chat', label: 'Chat', icon: 'message', path: '/chat' },
   { key: 'map', label: 'Map', icon: 'map', path: '/map' },
