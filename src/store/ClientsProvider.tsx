@@ -13,8 +13,7 @@ import { REFERENCE_KEY } from '@/store/TasksProvider';
  * useClientActions and fire after the server has answered.
  *
  * Every write also invalidates the reference query, because the consignment
- * form's client dropdown — and the sender address it prefills — is served from
- * that same /api/reference payload. Rename or retire a client and the form must
+ * form's client dropdown is served from that same /api/reference payload. Rename or retire a client and the form must
  * not go on offering what it was.
  */
 

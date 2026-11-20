@@ -1,7 +1,23 @@
 import L from 'leaflet';
 import { statusColorVar } from '@/domain/status';
+/**
+ * The eight map colours, indexed by a driver's `mapColorIndex`.
+ *
+ * Lived in the service-zone domain file until zones moved to the API; it was
+ * only ever presentation, and this is its one consumer.
+ */
+const MAP_COLORS = [
+  '#4B3FCF', // indigo
+  '#7C3AED', // violet
+  '#0891B2', // cyan
+  '#D97706', // amber
+  '#16A34A', // green
+  '#DC2626', // red
+  '#DB2777', // pink
+  '#7A7A93', // grey
+] as const;
 import type { TaskStatus } from '@/domain/status';
-import { ZONE_COLORS } from '@/domain/serviceZone';
+
 import type { MapPinDto } from '@/lib/api';
 import type { ColourMode, PlotEnd } from '../state/mapView';
 
@@ -24,7 +40,7 @@ import type { ColourMode, PlotEnd } from '../state/mapView';
  * displayed while the colour switch is on.
  */
 export function driverColour(colorIndex: number): string {
-  return ZONE_COLORS[Math.abs(colorIndex) % ZONE_COLORS.length].hex;
+  return MAP_COLORS[Math.abs(colorIndex) % MAP_COLORS.length];
 }
 
 /**

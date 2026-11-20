@@ -21,9 +21,9 @@ import { useClientActions } from './hooks/useClientActions';
  * Clients — admin only.
  *
  * A client is a name, a frozen-once-used code, an active flag and an optional
- * billing address. The address is the point of the screen: it is what a
- * consignment copies into its sender snapshot, which is why a client without one
- * says so plainly in its own column rather than showing an empty cell.
+ * billing address. It prints as the Bill To block on the client's invoices. It is
+ * no longer copied into a consignment's sender — that prefill was removed on
+ * purpose — so a missing one matters for billing, not for logging orders.
  */
 export function ClientsPage() {
   const { user: me } = useAuth();
@@ -70,7 +70,7 @@ export function ClientsPage() {
             </span>
           ) : (
             <span className="text-[12.5px] text-muted-foreground">
-              Not set — no sender prefill
+              No billing address
             </span>
           );
         },
@@ -146,7 +146,7 @@ export function ClientsPage() {
           Clients
         </h1>
         <p className="mt-0.5 text-[13px] text-muted-foreground">
-          Accounts orders are logged against. A client&apos;s address prefills the sender.
+          Accounts orders are logged against. The address is the billing address on their invoices.
         </p>
       </div>
 
@@ -219,7 +219,7 @@ export function ClientsPage() {
         body={
           <>
             This removes the client and its stored address for good. Orders already logged against
-            it are unaffected, but nothing will prefill from it again.
+            it, and invoices already raised for it, are unaffected.
           </>
         }
         onCancel={() => setConfirm(null)}

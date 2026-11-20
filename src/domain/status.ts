@@ -147,47 +147,27 @@ export function isEditable(status: TaskStatus): boolean {
   return status === 'UNASSIGNED' || status === 'ASSIGNED';
 }
 
-/**
- * Bulk status change is intentionally unavailable.
- *
- * A single target is illegal across a mixed selection — EN_ROUTE_TO_PICKUP is
- * only reachable from ASSIGNED — so offering one dropdown for many rows would
- * produce partial failures with no way to report them. The Status field is
- * removed from Bulk Update rather than left looking functional.
- */
-export const BULK_STATUS_OPTIONS: TaskStatus[] = [];
-
 /* ------------------------------------------------------------------------ tabs */
 
-export const TASK_TABS = ['active', 'new', 'delivered', 'search'] as const;
+/*
+ * Two tabs: the list, and Search.
+ *
+ * There used to be Active / New / Delivered - three views of the same rows,
+ * each a hard-coded status filter. They were folded into one Consignments list
+ * because the Status filter on that list already does the same job, and three
+ * near-identical tabs were more to read than to use. A tab no longer filters
+ * anything; it only chooses between the list and the search panel.
+ */
+export const TASK_TABS = ['all', 'search'] as const;
 export type TaskTab = (typeof TASK_TABS)[number];
 
 export const TAB_LABELS: Record<TaskTab, string> = {
-  active: 'Active Consignments',
-  new: 'New',
-  delivered: 'Delivered',
+  all: 'Consignments',
   search: 'Search',
 };
 
 export function isTaskTab(v: string): v is TaskTab {
   return (TASK_TABS as readonly string[]).includes(v);
-}
-
-export function isInTab(task: { status: TaskStatus; isNew?: boolean }, tab: TaskTab): boolean {
-  switch (tab) {
-    case 'active':
-      return task.status !== 'DELIVERED';
-    case 'new':
-      return !!task.isNew;
-    case 'delivered':
-      return task.status === 'DELIVERED';
-    case 'search':
-      return true;
-    default:
-      // Reachable from a stale bookmarked ?tab=... URL. Returning false beats
-      // falling off the end and returning undefined.
-      return false;
-  }
 }
 
 /* --------------------------------------------------------------- filter facets */

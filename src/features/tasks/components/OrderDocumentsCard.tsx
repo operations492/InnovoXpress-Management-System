@@ -22,7 +22,7 @@ const ACCEPT = 'application/pdf,image/png,image/jpeg,image/webp';
 /** Both kinds always render, attached or not, so an empty slot is discoverable. */
 const KINDS: Array<{ kind: OrderDocumentKind; title: string }> = [
   { kind: 'RELEASE_LETTER', title: 'Release letter' },
-  { kind: 'BILL_OF_LADING', title: 'Bill of lading' },
+  { kind: 'BILL_OF_LADING', title: 'Bill of Lading' },
 ];
 
 const FLAGS: Array<{ key: keyof OrderDocFlags; label: string }> = [

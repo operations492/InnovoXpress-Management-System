@@ -10,7 +10,7 @@
  * RHF-controlled. "Save & new" commits and clears; "Save consignment" commits
  * and closes.
  */
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { CheckIcon } from 'lucide-react';
@@ -57,13 +57,37 @@ export function NewConsignmentCard({ open, onClose, onCreate }: Props) {
   ];
   const canSave = blockers.length === 0;
 
-  const saveClose = form.handleSubmit(async (values) => {
-    const created = await onCreate(values, items.items);
-    // Leave the dialog open on failure so nothing typed is lost.
+  /*
+   * One create at a time.
+   *
+   * The buttons used to be disabled only while the form was incomplete, so a
+   * double-click — or a second click while a slow request was still out —
+   * created the order twice. Two guards, because they cover different gaps:
+   * `saving` disables the buttons once React re-renders, and the ref stops a
+   * second click that lands BEFORE that re-render, which a state value cannot
+   * see yet.
+   */
+  const inFlight = useRef(false);
+  const [saving, setSaving] = useState(false);
+
+  const submit = (after: (created: Task | null) => void) =>
+    form.handleSubmit(async (values) => {
+      if (inFlight.current) return;
+      inFlight.current = true;
+      setSaving(true);
+      try {
+        after(await onCreate(values, items.items));
+      } finally {
+        inFlight.current = false;
+        setSaving(false);
+      }
+    });
+
+  // Leave the dialog open on failure so nothing typed is lost.
+  const saveClose = submit((created) => {
     if (created !== null) onClose();
   });
-  const saveAnother = form.handleSubmit(async (values) => {
-    const created = await onCreate(values, items.items);
+  const saveAnother = submit((created) => {
     if (created !== null) clearAll();
   });
 
@@ -72,12 +96,7 @@ export function NewConsignmentCard({ open, onClose, onCreate }: Props) {
       open={open}
       onClose={onClose}
       width={700}
-      title={
-        <span className="inline-flex items-center gap-2.5">
-          New consignment
-          <span className="font-mono text-xs font-normal text-primary">ORD-…-draft</span>
-        </span>
-      }
+      title="New consignment"
       footer={
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={onClose}>
@@ -87,11 +106,17 @@ export function NewConsignmentCard({ open, onClose, onCreate }: Props) {
             <span className="text-xs text-muted-foreground">Still needed: {blockers.join(', ')}</span>
           )}
           <div className="flex-1" />
-          <Button variant="utility" size="sm" disabled={!canSave} onClick={saveAnother}>
+          <Button variant="utility" size="sm" disabled={!canSave || saving} onClick={saveAnother}>
             Save &amp; new
           </Button>
-          <Button variant="primary" size="sm" disabled={!canSave} onClick={saveClose} leadingIcon={<CheckIcon />}>
-            Save consignment
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={!canSave || saving}
+            onClick={saveClose}
+            leadingIcon={<CheckIcon />}
+          >
+            {saving ? 'Saving…' : 'Save consignment'}
           </Button>
         </div>
       }

@@ -2,14 +2,15 @@
  * Column definitions for the task table. Each special cell is its OWN click target
  * (the prototype's distinct interactions): the destination opens View, the driver
  * cell opens Assign, the status chip opens Change Status, the pencil opens the Task
- * Card, and the ▾ menu offers View / Change Status / Delete.
+ * Card, and the ▾ menu offers View / Change Status. There is no Delete: the backend
+ * has no order delete, by design.
  */
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { Icon, IconButton, Popover, StatusChip } from '@/ui';
 import type { ColumnDef } from '@/ui';
 import { cn } from '@/lib/utils';
-import { dash, money } from '@/domain/format';
+import { dash } from '@/domain/format';
 import type { Task } from '@/domain/types';
 import { COLUMNS } from '../tasks.types';
 
@@ -18,7 +19,6 @@ export interface ColumnHandlers {
   onAssign: (id: string) => void;
   onChangeStatus: (id: string) => void;
   onEdit: (id: string) => void;
-  onDelete: (id: string) => void;
   onSort: (key: string) => void;
   sortKey: string | null;
   sortDir: 'asc' | 'desc';
@@ -32,14 +32,11 @@ const TEXT_ACCESSOR: Record<string, (t: Task) => string> = {
   createdTime: (t) => t.createdTime,
   type: (t) => t.type,
   dispatchAddress: (t) => t.dispatchAddress,
-  dispatchBuilding: (t) => t.dispatchBuilding,
   requester: (t) => t.requester,
   requesterPhone: (t) => t.requesterPhone,
-  destBuilding: (t) => t.destBuilding,
   destNotes: (t) => t.destNotes,
   recipientPhone: (t) => t.recipientPhone,
   recipientEmail: (t) => t.recipientEmail,
-  team: (t) => t.team,
   pickupAfter: (t) => t.pickupAfter,
   priority: (t) => t.priority,
   merchant: (t) => t.merchant,
@@ -106,20 +103,14 @@ function DriverCell({ task, onAssign }: { task: Task; onAssign: (id: string) => 
 function MenuItem({
   icon,
   label,
-  danger,
   onClick,
 }: {
   icon: ReactNode;
   label: string;
-  danger?: boolean;
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      className={cn('ix-reset-btn ix-menu-item', danger && 'text-destructive')}
-      onClick={onClick}
-    >
+    <button type="button" className="ix-reset-btn ix-menu-item" onClick={onClick}>
       {icon}
       {label}
     </button>
@@ -162,15 +153,6 @@ function RowActions({ task, h }: { task: Task; h: ColumnHandlers }) {
               h.onChangeStatus(task.id);
             }}
           />
-          <MenuItem
-            icon={<Icon name="trash" size={15} />}
-            label="Delete"
-            danger
-            onClick={() => {
-              close();
-              h.onDelete(task.id);
-            }}
-          />
         </div>
       </Popover>
     </div>
@@ -198,10 +180,6 @@ export function buildColumns(visibleKeys: string[], h: ColumnHandlers): ColumnDe
         ...base,
         render: (t: Task) => <StatusChip status={t.status} onClick={() => h.onChangeStatus(t.id)} />,
       };
-    if (key === 'cod')
-      return { ...base, render: (t: Task) => <span className="tnum">{money(t.codNum)}</span> };
-    if (key === 'shippingFee')
-      return { ...base, render: (t: Task) => <span className="tnum">{money(t.feeNum)}</span> };
 
     const accessor = TEXT_ACCESSOR[key];
     return {

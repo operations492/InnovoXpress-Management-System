@@ -12,11 +12,11 @@ import { ServiceLevelsPage } from '@/features/finance/ServiceLevelsPage';
 import { ServiceZonesPage } from '@/features/finance/ServiceZonesPage';
 import { ZoneBookEditorPage } from '@/features/finance/ZoneBookEditorPage';
 import { ZoneMapPage } from '@/features/finance/ZoneMapPage';
-import { TaxRatesPage } from '@/features/finance/TaxRatesPage';
-import { RateLeviesPage } from '@/features/finance/RateLeviesPage';
-import { RatePlansPage } from '@/features/finance/RatePlansPage';
-import { RatePlanEditorPage } from '@/features/finance/RatePlanEditorPage';
-import { QuoteCalculatorPage } from '@/features/finance/QuoteCalculatorPage';
+import { InvoicesPage } from '@/features/finance/InvoicesPage';
+import { InvoiceDetailPage } from '@/features/finance/InvoiceDetailPage';
+import { RateCardsPage } from '@/features/finance/RateCardsPage';
+import { RateCardEditorPage } from '@/features/finance/RateCardEditorPage';
+import { RateCardTestPage } from '@/features/finance/RateCardTestPage';
 
 export default function App() {
   return (
@@ -34,11 +34,11 @@ export default function App() {
         <Route path="/finance/service-zones" element={<ServiceZonesPage />} />
         <Route path="/finance/service-zones/:bookId" element={<ZoneBookEditorPage />} />
         <Route path="/finance/service-zones/:bookId/map" element={<ZoneMapPage />} />
-        <Route path="/finance/tax-rates" element={<TaxRatesPage />} />
-        <Route path="/finance/rate-levies" element={<RateLeviesPage />} />
-        <Route path="/finance/rate-plans" element={<RatePlansPage />} />
-        <Route path="/finance/rate-plans/:planId" element={<RatePlanEditorPage />} />
-        <Route path="/finance/quote" element={<QuoteCalculatorPage />} />
+        <Route path="/finance/invoices" element={<InvoicesPage />} />
+        <Route path="/finance/invoices/:invoiceId" element={<InvoiceDetailPage />} />
+        <Route path="/finance/rate-cards" element={<RateCardsPage />} />
+        <Route path="/finance/rate-cards/:cardId" element={<RateCardEditorPage />} />
+        <Route path="/finance/rate-cards/:cardId/test" element={<RateCardTestPage />} />
         <Route path="*" element={<Navigate to="/tasks" replace />} />
       </Route>
     </Routes>

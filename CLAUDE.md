@@ -134,19 +134,23 @@ Its default marker icon breaks under the bundler, so **always `L.divIcon`**. Bey
 
 ---
 
-## 5. Deliberately inert
+## 5. No fixtures
 
-Fields with no backend column — COD, delivery fee, crew, handling, additional services, suite/floor —
-stay on screen and simply do not persist. **Leave them alone.**
+UI with no backend behind it has been removed, and should not come back: COD and fee (columns, totals,
+the Task Card's Invoice tab), team, building, requirements, bulk edit, order Delete (the backend has no
+order delete by design), the toast-only Label / Docket / Export / Notify / Card view toolbar buttons,
+the Auto-Assign tab, the inert Table Settings dropdowns, and the top bar's Dashboard, Reports, Search,
+bell and gear. Per-order label / docket / POD printing is real and stays. Additional services on an
+order are real (`consignment_services`), picked from the customer's rate card.
 
-Consignment items are no longer on that list. An item is exactly what the API takes and returns:
+Consignment items are real too. An item is exactly what the API takes and returns:
 `barcode` (the Reference column), `description`, `qty`, `weightLb` (the whole line, as typed),
 `lengthIn` / `widthIn` / `heightIn`, and a read-only `cubic` the server derives. `derive.cubicOf` uses the
 same constant and rounding as the backend so the figure shown before save matches the one after.
 Blank figures are `null`, never 0, and render as a dash. There is no package type, line total, product
 id or order id anywhere any more.
 
-Finance pages are out of scope and still on in-memory fixtures — **except Service Levels**, which is
+Finance pages are all on the real API. Service Levels, the earliest of them, is
 on `/api/service-levels` through `ServiceLevelsProvider` (TanStack Query, same shape as the old
 in-memory store so the rate plan pages did not change). A level is a name, `active` and a
 `usageCount`; Delete is offered only at zero usage, otherwise the panel says to retire it, which is

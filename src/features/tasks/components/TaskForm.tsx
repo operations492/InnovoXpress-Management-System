@@ -20,12 +20,16 @@
  * makes the text and the coordinate physically unable to disagree. The summary
  * line under each address button shows all three read-only.
  *
- * **The Logistics card is gone.** Crew, Driver, Handling, Additional services,
- * COD and Delivery fee had no backend column between them — they were rendered,
- * never persisted — and they were sitting on top of the four scheduling windows,
+ * **The Logistics card is gone.** Crew, Driver, Handling, COD and Delivery fee
+ * had no backend column between them — they were rendered, never persisted —
+ * and they were sitting on top of the four scheduling windows,
  * which are the only fields in that area the database actually stores. The
  * windows now have their own Schedule card and the inert controls are not shown.
  * A driver is assigned through the assign picker, which posts a driver id.
+ *
+ * **Additional services came back**, because they are real now: they persist to
+ * `consignment_services` and are priced from the customer's rate card when the
+ * job is invoiced. The list is per-customer for that reason.
  *
  * Field *keys* are unchanged from the schema; only labels + arrangement follow
  * the Iris vocabulary. The items grid is injected full-width below via
@@ -35,10 +39,10 @@ import type { ChangeEvent, ReactNode } from 'react';
 import type { UseFormReturn } from 'react-hook-form';
 import { Card, Input, Select, Textarea } from '@/ui';
 import type { TaskFormValues } from '@/domain/schemas';
-import { NO_CLIENT } from '@/domain/schemas';
-import { senderFromClient } from '@/domain/client';
 import type { ClientRefDto } from '@/lib/api';
 import { AddressField } from './AddressAutocomplete';
+import { ClientServicesField } from './ClientServicesField';
+import { ServiceLevelField } from './ServiceLevelField';
 import { DateTimeField } from './DateTimeField';
 
 /**
@@ -127,9 +131,9 @@ interface TaskFormProps {
   form: UseFormReturn<TaskFormValues>;
   itemsSlot?: ReactNode;
   /**
-   * Real clients from the API, address and all. Only the "not selected"
-   * sentinel until they arrive. Full records rather than names because picking
-   * one prefills the sender from its stored address.
+   * Real clients from the API. Used for the Client dropdown and to find the
+   * picked client's id (for its rate card's services and service levels).
+   * Picking one no longer touches the sender; the address is billing-only.
    */
   clients?: readonly ClientRefDto[];
   /**
@@ -140,11 +144,18 @@ interface TaskFormProps {
 }
 
 export function TaskForm({ form, itemsSlot, clients, serviceLevelOptions }: TaskFormProps) {
-  // Never a fixture name here: a name the API does not know cannot be saved.
-  const clientNames = [NO_CLIENT, ...(clients ?? []).map((c) => c.name)];
+  /*
+   * Real customers only. The built-in Walk-in account (code WLK) is left out
+   * because "No client" already means exactly that — listing both would offer
+   * two names for one choice.
+   */
+  const clientNames = (clients ?? []).filter((c) => c.code !== 'WLK').map((c) => c.name);
 
   const { watch, setValue } = form;
   const v = watch();
+
+  const pickedClientId = clients?.find((c) => c.name === v.merchant)?.id ?? null;
+
 
   const text = (name: keyof TaskFormValues) => ({
     value: String(v[name] ?? ''),
@@ -153,24 +164,15 @@ export function TaskForm({ form, itemsSlot, clients, serviceLevelOptions }: Task
   });
 
   /**
-   * Picking a client prefills the sender from its stored address.
+   * Picking a client records who the order is for, and nothing else.
    *
-   * On the pick, not in an effect keyed on the selected name: an effect would
-   * fire again every time the form re-seeded and quietly overwrite edits the
-   * operator had made to an order that already exists. A client with no stored
-   * address changes nothing.
+   * It used to copy the client's stored address into the sender. That was taken
+   * out on purpose: the pickup is often not the client's own depot, and a
+   * prefilled sender was easy to save without noticing it was the wrong place.
+   * The sender is now always entered for the order itself.
    */
   const pickClient = (e: ChangeEvent<HTMLSelectElement>) => {
-    const name = e.target.value;
-    setValue('merchant', name, { shouldDirty: true });
-
-    const picked = clients?.find((c) => c.name === name);
-    const sender = picked ? senderFromClient(picked) : null;
-    if (!sender) return;
-
-    for (const [k, val] of Object.entries(sender) as [keyof TaskFormValues, never][]) {
-      setValue(k, val, { shouldDirty: true });
-    }
+    setValue('merchant', e.target.value, { shouldDirty: true });
   };
 
   return (
@@ -185,27 +187,66 @@ export function TaskForm({ form, itemsSlot, clients, serviceLevelOptions }: Task
             <Field label="Priority">
               <Select options={PRIORITY_OPTIONS} {...text('priority')} />
             </Field>
-            <Field label="Client" required>
-              <Select options={clientNames} value={v.merchant} onChange={pickClient} />
+            {/*
+              A real customer, or "No client". Nothing can be typed: an order
+              either belongs to a customer that exists or to none, and "none" is
+              filed under the built-in Walk-in account so it still gets an order
+              number. A Walk-in order reopened here shows "No client", because
+              that is what it is.
+            */}
+            <Field label="Client">
+              <Select
+                placeholder="No client"
+                options={clientNames}
+                value={clientNames.includes(v.merchant) ? v.merchant : ''}
+                onChange={pickClient}
+              />
             </Field>
             {serviceLevelOptions && (
               <Field label="Service level" required>
-                <Select
-                  placeholder="Select a service level"
-                  options={[...serviceLevelOptions]}
-                  {...text('serviceLevelId')}
+                <ServiceLevelField
+                  clientId={pickedClientId}
+                  options={serviceLevelOptions}
+                  value={v.serviceLevelId}
+                  onChange={(id) => setValue('serviceLevelId', id, { shouldDirty: true })}
                 />
               </Field>
             )}
             {/*
-              No "Reference" input: the order's own id is `orderNo`, generated by
-              the server. `clientReference` still exists and still round-trips —
-              it is the client's own tracking number, set by import or bulk
-              update, not typed in here.
+              The client's own tracking number (the API's `clientReference`),
+              unique within the client. Left blank it is NOT left empty: the server
+              fills it with the order number it just allocated, so every order has
+              one and nobody has to invent a format by hand.
             */}
+            <Field label="External ID">
+              <Input placeholder="Leave blank to use the order number" {...text('externalId')} />
+            </Field>
           </div>
-          <Field label="Note">
-            <Textarea placeholder="Anything the driver should know" {...text('description')} />
+
+          {/*
+            Full width, not in the two-column grid: the rows carry a name, a
+            price and a badge, and half a dialog is not enough for all three.
+          */}
+          <ClientServicesField
+            clientId={pickedClientId}
+            value={v.additionalServices}
+            onChange={(next) =>
+              setValue('additionalServices', next, { shouldDirty: true })
+            }
+          />
+          {/*
+            Operator notes, saved as `generalNote` — the owner's decision is that
+            this is for the operations team, and the new driver app will not
+            render it.
+
+            Two places still expose it today, and both need closing before it is
+            truly internal: the backend's driver job payload still sends it
+            (drivers.repository.ts), which the current test driver app renders;
+            and the POD report PDF prints it as "Consignment Note" for the
+            customer (documents.render.ts).
+          */}
+          <Field label="Operator notes">
+            <Textarea placeholder="Internal notes for the operations team" {...text('description')} />
           </Field>
         </Stack>
       </Card>
@@ -245,10 +286,17 @@ export function TaskForm({ form, itemsSlot, clients, serviceLevelOptions }: Task
             }}
           />
           {/*
-            No "Suite / floor" (it never had a column) and no "Instructions":
-            sender instructions now come from the client’s saved address, and an
-            order that already has some still re-sends them on edit.
+            Saved as `senderInstructions`. Picking a client pre-fills it from the
+            client's saved instructions, and the operator can change it for this
+            one order without touching the client record. Clearing it clears the
+            column: the sender is sent whole, and an empty box sends no value.
           */}
+          <Field label="Pickup notes">
+            <Textarea
+              placeholder="e.g. Use loading dock 4, ring first"
+              {...text('dispatchNotes')}
+            />
+          </Field>
         </Stack>
       </Card>
 
@@ -289,10 +337,16 @@ export function TaskForm({ form, itemsSlot, clients, serviceLevelOptions }: Task
             }}
           />
           {/*
-            No "Suite / floor" (never had a column) and no "Leave at / note":
-            receiver notes still round-trip and still show in the optional
-            Destination Notes column on the list.
+            Saved as `receiverNotes`, and shown in the optional Destination Notes
+            column on the list. Clearing it clears the column, for the same reason
+            as the pickup notes above.
           */}
+          <Field label="Drop notes">
+            <Textarea
+              placeholder="e.g. Leave with reception, call on arrival"
+              {...text('destNotes')}
+            />
+          </Field>
         </Stack>
       </Card>
 

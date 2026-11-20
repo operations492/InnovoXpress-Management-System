@@ -75,7 +75,6 @@ export interface Task {
 
   // Destination / recipient (the receiver snapshot).
   dest: string;
-  destBuilding: string;
   /** Structured drop address — the API stores area/city/postcode separately. */
   destProvince: string;
   destCity: string;
@@ -96,7 +95,6 @@ export interface Task {
   dispatchLat: number | null;
   dispatchLng: number | null;
   dispatchAddress: string;
-  dispatchBuilding: string;
   /** Structured pickup address — the API stores area/city/postcode separately. */
   dispatchProvince: string;
   dispatchCity: string;
@@ -119,22 +117,15 @@ export interface Task {
   deliverBeforeFull: string;
   createdTime: string;
 
-  // Money (prototype pricing; no backend column yet — see README).
-  feeNum: number; // shipping fee
-  codNum: number; // cash on delivery
-
   // Collections.
   items: TaskItem[];
   attachments: number;
-  requirements: string[];
   /** Additional Services / extra charges ticked on the form (client-side only). */
   additionalServices?: string[];
-  team: string;
   history: HistoryEvent[];
 
   // UI flags.
   isNew: boolean;
-  notification: boolean;
 }
 
 export interface Driver {

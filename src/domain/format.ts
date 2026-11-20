@@ -1,19 +1,10 @@
 /**
- * Display formatting — centralized so currency/number conventions live in ONE place.
- * The design language carries a currency symbol on money and uses tabular numerals
- * in tables. The prototype uses `$`; Innovo Xpress is Canadian, so flip CURRENCY to
- * `CAD $` once confirmed — every figure updates from here.
+ * Display formatting — centralized so number and date conventions live in ONE place.
+ * The design language uses tabular numerals in tables.
  */
-
-export const CURRENCY = '$';
 
 function safe(n: number): number {
   return Number.isFinite(n) ? n : 0;
-}
-
-/** Money with the currency symbol, two decimals. e.g. money(20) → "$20.00". */
-export function money(n: number): string {
-  return `${CURRENCY}${safe(n).toFixed(2)}`;
 }
 
 /**
@@ -51,12 +42,6 @@ export function dash(v: string | number | null | undefined): string {
   return s;
 }
 
-/** Parse a possibly currency-prefixed string to a number ("$1.50" → 1.5). */
-export function parseMoney(v: string): number {
-  const n = parseFloat(String(v).replace(/[^0-9.-]/g, ''));
-  return Number.isFinite(n) ? n : 0;
-}
-
 /** Parse a possibly unit-suffixed weight string to a number ("0.50 KG" → 0.5). */
 export function parseWeight(v: string): number {
   const n = parseFloat(String(v).replace(/[^0-9.-]/g, ''));
@@ -64,17 +49,6 @@ export function parseWeight(v: string): number {
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-/** Short display timestamp matching the prototype, e.g. "Jun 26 11:16 AM". */
-export function nowLabel(d: Date = new Date()): string {
-  const mon = MONTHS[d.getMonth()];
-  const day = d.getDate();
-  const minutes = d.getMinutes();
-  const ampm = d.getHours() >= 12 ? 'PM' : 'AM';
-  const hour12 = d.getHours() % 12 || 12;
-  const mm = minutes < 10 ? `0${minutes}` : String(minutes);
-  return `${mon} ${day} ${hour12}:${mm} ${ampm}`;
-}
 
 /* ----------------------------------------------------- Date / time helpers */
 

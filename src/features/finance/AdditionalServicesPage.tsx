@@ -7,14 +7,18 @@
  * backend. This list is the source of truth for the create-consignment dropdown.
  */
 import { useState } from 'react';
-import { Button, Icon, Input, Modal } from '@/ui';
+import { Button, Icon, Input, Modal, Tabs } from '@/ui';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/components/Toast';
-import type { AdditionalServicePatch } from '@/domain/services';
+import type { AdditionalService, AdditionalServicePatch } from '@/domain/services';
+import type { ServiceHoursDto } from '@/lib/api';
 import { useAdditionalServicesStore } from '@/store/AdditionalServicesProvider';
 import { ServiceDetailPanel } from './components/ServiceDetailPanel';
+import { ServiceHoursModal, summariseHours } from './components/ServiceHoursModal';
 
 const GRID = 'grid grid-cols-[1fr_92px] gap-2';
+/** The system tab carries a third column for the hours and their settings button. */
+const SYSTEM_GRID = 'grid grid-cols-[1fr_auto_92px] gap-2';
 
 /** ApiError carries a server message; anything else is unknown. */
 function reason(e: unknown): string {
@@ -28,12 +32,42 @@ export function AdditionalServicesPage() {
   const [selectedId, setSelectedId] = useState<string | null>(store.services[0]?.id ?? null);
   const [namingNew, setNamingNew] = useState(false);
   const [newName, setNewName] = useState('');
+  const [tab, setTab] = useState('manual');
+  const [hoursFor, setHoursFor] = useState<AdditionalService | null>(null);
 
-  const selected = store.services.find((s) => s.id === selectedId) ?? null;
+  /*
+   * Two catalogues, not one list with a flag. An operator ticks the manual
+   * charges on an order; the system-added ones are applied by pricing itself
+   * from the job's own time, so showing them together would invite someone to
+   * tick a charge that is not theirs to tick.
+   */
+  const manual = store.services.filter((s) => s.trigger === 'MANUAL');
+  const system = store.services.filter((s) => s.trigger !== 'MANUAL');
+  const onSystemTab = tab === 'system';
+  const visible = onSystemTab ? system : manual;
+
+  const selected = visible.find((s) => s.id === selectedId) ?? null;
   const mode = selected ? 'edit' : 'empty';
   const activeCount = store.services.filter((s) => s.active).length;
 
   const selectRow = (id: string) => setSelectedId(id);
+
+  // A row selected on one tab is not on the other, so the panel follows the tab.
+  const switchTab = (next: string) => {
+    setTab(next);
+    setSelectedId((next === 'system' ? system : manual)[0]?.id ?? null);
+  };
+
+  const saveHours = async (hours: ServiceHoursDto) => {
+    if (!hoursFor) return;
+    try {
+      const saved = await store.update(hoursFor.id, { hours });
+      setHoursFor(null);
+      flash(`${saved.name} hours saved`);
+    } catch (e) {
+      flash(`Could not save hours: ${reason(e)}`);
+    }
+  };
 
   const openNew = () => {
     setNewName('');
@@ -84,11 +118,25 @@ export function AdditionalServicesPage() {
       </div>
 
       {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 pb-3 pt-1">
-        <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">Extra charge catalog</span>
-        <Button variant="primary" size="sm" leadingIcon={<Icon name="plus" size={15} />} onClick={openNew}>
-          New service
-        </Button>
+      <div className="flex items-center justify-between gap-3 px-4 pb-3 pt-1">
+        <Tabs
+          value={tab}
+          onChange={switchTab}
+          items={[
+            { value: 'manual', label: 'Operator picks', count: manual.length },
+            { value: 'system', label: 'System added', count: system.length },
+          ]}
+        />
+        {onSystemTab ? (
+          /* No New button here on purpose: nobody invents an automatic charge. */
+          <span className="font-mono text-[10px] uppercase tracking-[0.1em] text-muted-foreground">
+            Applied automatically
+          </span>
+        ) : (
+          <Button variant="primary" size="sm" leadingIcon={<Icon name="plus" size={15} />} onClick={openNew}>
+            New service
+          </Button>
+        )}
       </div>
 
       {/* Master-detail */}
@@ -96,21 +144,26 @@ export function AdditionalServicesPage() {
         {/* Master list */}
         <div className="min-w-0 flex-1">
           <div className="overflow-hidden rounded-xl border bg-card">
-            <div className={cn(GRID, 'border-b bg-muted px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground')}>
+            <div className={cn(onSystemTab ? SYSTEM_GRID : GRID, 'border-b bg-muted px-4 py-2.5 font-mono text-[10px] uppercase tracking-[0.08em] text-muted-foreground')}>
               <span>Service</span>
+              {onSystemTab && <span>Business hours</span>}
               <span className="text-right">Status</span>
             </div>
 
-            {store.services.length === 0 ? (
-              <p className="px-4 py-10 text-center text-sm text-muted-foreground">No additional services yet.</p>
+            {visible.length === 0 ? (
+              <p className="px-4 py-10 text-center text-sm text-muted-foreground">
+                {onSystemTab
+                  ? 'No system-added charge exists yet.'
+                  : 'No additional services yet.'}
+              </p>
             ) : (
-              store.services.map((s) => {
+              visible.map((s) => {
                 const isSel = s.id === selectedId;
                 return (
                   <div
                     key={s.id}
                     className={cn(
-                      GRID,
+                      onSystemTab ? SYSTEM_GRID : GRID,
                       'relative items-center border-b border-l-2 border-border/60 px-4 py-2.5 transition-colors last:border-b-0',
                       isSel ? 'border-l-primary bg-accent' : 'border-l-transparent hover:bg-muted',
                     )}
@@ -131,6 +184,22 @@ export function AdditionalServicesPage() {
                     >
                       {s.name}
                     </span>
+                    {onSystemTab && (
+                      /* Sits above the row's click target so the button stays clickable. */
+                      <span className="relative z-10 flex items-center gap-2">
+                        <span className="font-mono text-[10px] text-muted-foreground">
+                          {summariseHours(s.hours)}
+                        </span>
+                        <Button
+                          variant="utility"
+                          size="sm"
+                          leadingIcon={<Icon name="sliders" size={13} />}
+                          onClick={() => setHoursFor(s)}
+                        >
+                          Hours
+                        </Button>
+                      </span>
+                    )}
                     <span
                       className={cn(
                         'pointer-events-none z-10 text-right font-mono text-[10px] uppercase tracking-wide',
@@ -187,6 +256,16 @@ export function AdditionalServicesPage() {
         </label>
         <p className="mt-2 text-xs text-muted-foreground">You'll set pricing and options after it's created.</p>
       </Modal>
+
+      {/* Mounted only while open, so each visit starts from the saved hours. */}
+      {hoursFor && (
+        <ServiceHoursModal
+          key={hoursFor.id}
+          service={hoursFor}
+          onClose={() => setHoursFor(null)}
+          onSave={saveHours}
+        />
+      )}
     </div>
   );
 }

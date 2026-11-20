@@ -659,7 +659,6 @@ export function MapPage() {
           setCardId(null);
         }}
         onChangeStatus={() => {}}
-        onDelete={() => {}}
       />
 
       <DriverAssignPopover
@@ -669,7 +668,6 @@ export function MapPage() {
         // Turns the picker into the ranked list plus the proximity map.
         consignmentId={assignId}
         onAssign={doAssign}
-        onNotify={actions.notify}
       />
 
       {/* Bulk assign reuses the same picker; without a single consignment it
@@ -681,7 +679,6 @@ export function MapPage() {
         taskCount={selected.length}
         consignmentId={selected.length === 1 ? selected[0].id : null}
         onAssign={doBulkAssign}
-        onNotify={actions.notify}
         pending={routeActions.assignBulk.isPending}
       />
 

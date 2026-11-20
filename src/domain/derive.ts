@@ -4,7 +4,6 @@
  * never stored separately where it could drift.
  */
 import type { Driver, Task, TaskItem } from './types';
-import { isInTab } from './status';
 import type { TaskTab } from './status';
 import { addDays, startOfDay, timeOfDayMinutes, toISO } from './format';
 
@@ -27,7 +26,7 @@ export interface TaskFilters {
 }
 
 export const EMPTY_FILTERS: TaskFilters = {
-  tab: 'active',
+  tab: 'all',
   tableQ: '',
   dateFilter: 'all',
   dateFrom: null,
@@ -119,7 +118,6 @@ function sortTasks(rows: Task[], sortKey: string | null, sortDir: 'asc' | 'desc'
 export function visibleRows(tasks: Task[], f: TaskFilters): Task[] {
   const filtered = tasks.filter(
     (t) =>
-      isInTab(t, f.tab) &&
       matchDate(t, f) &&
       matchChecklists(t, f) &&
       matchQuery(t, f.tableQ),
@@ -127,17 +125,13 @@ export function visibleRows(tasks: Task[], f: TaskFilters): Task[] {
   return sortTasks(filtered, f.sortKey, f.sortDir);
 }
 
+/** The toolbar's footer figures. There is no money on an order, so only a count. */
 export interface RowTotals {
   count: number;
-  fee: number;
-  cod: number;
 }
 
 export function totals(rows: Task[]): RowTotals {
-  return rows.reduce<RowTotals>(
-    (acc, t) => ({ count: acc.count + 1, fee: acc.fee + t.feeNum, cod: acc.cod + t.codNum }),
-    { count: 0, fee: 0, cod: 0 },
-  );
+  return { count: rows.length };
 }
 
 /* -------------------------------------------------------------------- items */

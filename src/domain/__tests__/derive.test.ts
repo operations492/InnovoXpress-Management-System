@@ -25,15 +25,18 @@ const item = (o: Partial<TaskItem>): TaskItem => ({
 });
 
 describe('visibleRows', () => {
-  it('filters by tab and table query', () => {
+  it('shows every order in one list, narrowed only by the filters', () => {
     const tasks = [
       makeTask({ id: 'a', status: 'ASSIGNED', recipient: 'Alice' }),
       makeTask({ id: 'b', status: 'DELIVERED', recipient: 'Bob' }),
     ];
-    expect(visibleRows(tasks, { ...EMPTY_FILTERS, tab: 'active' }).map((t) => t.id)).toEqual(['a']);
-    expect(visibleRows(tasks, { ...EMPTY_FILTERS, tab: 'delivered' }).map((t) => t.id)).toEqual(['b']);
+    // Delivered and undelivered side by side: there is no status tab any more.
+    expect(visibleRows(tasks, EMPTY_FILTERS).map((t) => t.id)).toEqual(['a', 'b']);
+    // The Status filter does what the Delivered tab used to.
+    expect(visibleRows(tasks, { ...EMPTY_FILTERS, fStatus: ['DELIVERED'] }).map((t) => t.id)).toEqual(['b']);
+    expect(visibleRows(tasks, { ...EMPTY_FILTERS, tableQ: 'alice' }).map((t) => t.id)).toEqual(['a']);
     expect(
-      visibleRows(tasks, { ...EMPTY_FILTERS, tab: 'delivered', tableQ: 'alice' }).map((t) => t.id),
+      visibleRows(tasks, { ...EMPTY_FILTERS, fStatus: ['DELIVERED'], tableQ: 'alice' }).map((t) => t.id),
     ).toEqual([]);
   });
 });
@@ -66,9 +69,8 @@ describe('matchDate', () => {
 });
 
 describe('totals + itemsGrandTotal', () => {
-  it('sums fee/cod', () => {
-    const t = totals([makeTask({ feeNum: 2, codNum: 20 }), makeTask({ feeNum: 3, codNum: 5 })]);
-    expect(t).toEqual({ count: 2, fee: 5, cod: 25 });
+  it('counts the rows', () => {
+    expect(totals([makeTask(), makeTask()])).toEqual({ count: 2 });
   });
 
   it('sums item qty/weight/cubic, treating blank figures as 0', () => {

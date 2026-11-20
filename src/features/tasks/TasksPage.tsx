@@ -10,7 +10,6 @@ import { TASK_TABS, TAB_LABELS } from '@/domain/status';
 import type { TaskStatus } from '@/domain/status';
 import type { TaskFormValues } from '@/domain/schemas';
 import type { TaskItem } from '@/domain/types';
-import type { BulkPatch } from '@/domain/mutations';
 import { useTaskFilters } from './hooks/useTaskFilters';
 import { useTask, useTasks } from './hooks/useTasks';
 import { useSelection } from './hooks/useSelection';
@@ -30,7 +29,6 @@ import { TaskCardModal } from './components/TaskCardModal';
 import { NewConsignmentCard } from './components/NewConsignmentCard';
 import { ViewTaskModal } from './components/ViewTaskModal';
 import { DriverLocationModal } from './components/DriverLocationModal';
-import { BulkUpdateModal } from './components/BulkUpdateModal';
 import { TableSettingsModal } from './components/TableSettingsModal';
 import { SearchPanel } from './components/SearchPanel';
 
@@ -63,7 +61,6 @@ export function TasksPage() {
   const [statusId, setStatusId] = useState<string | null>(null);
   const [showNewTask, setShowNewTask] = useState(false);
   const [showTableSettings, setShowTableSettings] = useState(false);
-  const [showBulkEdit, setShowBulkEdit] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignTaskId, setAssignTaskId] = useState<string | null>(null); // null = bulk
 
@@ -83,27 +80,18 @@ export function TasksPage() {
     setAssignOpen(true);
   }, []);
 
-  const onDelete = useCallback(
-    (id: string) => {
-      actions.remove([id]);
-      selection.set(selection.selected.filter((x) => x !== id));
-    },
-    [actions, selection],
-  );
-
   const handlers: ColumnHandlers = useMemo(
     () => ({
       onView: (id) => setViewId(id),
       onAssign: (id) => openAssign(id),
       onChangeStatus: (id) => setStatusId(id),
       onEdit: (id) => setCardId(id),
-      onDelete,
       onSort: setSort,
       sortKey: filters.sortKey,
       sortDir: filters.sortDir,
       onOpenTableSettings: () => setShowTableSettings(true),
     }),
-    [openAssign, onDelete, setSort, filters.sortKey, filters.sortDir],
+    [openAssign, setSort, filters.sortKey, filters.sortDir],
   );
 
   /* ------------------------------------------------------- Toolbar handlers */
@@ -111,21 +99,11 @@ export function TasksPage() {
     () => ({
       onNewTask: () => setShowNewTask((s) => !s),
       onAssign: () => (selection.selected.length ? openAssign(null) : needSelection()),
-      onBulkEdit: () => (selection.selected.length ? setShowBulkEdit(true) : needSelection()),
-      onDelete: () => {
-        if (!selection.selected.length) return needSelection();
-        actions.remove(selection.selected);
-        selection.clear();
-      },
-      onLabel: actions.label,
-      onDocket: actions.docket,
-      onDownload: actions.download,
-      onCardView: () => flash('Card view'),
       onTableSettings: () => setShowTableSettings(true),
       onEditFirst: () => (rows.length ? setCardId(rows[0].id) : needSelection()),
       onClearSelection: selection.clear,
     }),
-    [selection, openAssign, needSelection, actions, flash, rows],
+    [selection, openAssign, needSelection, rows],
   );
 
   /* --------------------------------------------------------- Selection: all */
@@ -169,18 +147,9 @@ export function TasksPage() {
 
   /* --------------------------------------------------------------- New task */
   const onCreate = async (values: TaskFormValues, items: TaskItem[]) => {
-    const created = await actions.create(values, items);
-    // Only jump tabs on success — on failure the card stays open with the
-    // operator's input intact.
-    if (created) setTab('new');
-    return created;
-  };
-
-  /* ------------------------------------------------------------ Bulk update */
-  const onBulkSave = (patch: BulkPatch) => {
-    actions.bulkUpdate(selection.selected, patch);
-    selection.clear();
-    setShowBulkEdit(false);
+    // No tab jump any more: the one list already shows the new order, at the
+    // top. On failure the card stays open with the operator's input intact.
+    return actions.create(values, items);
   };
 
   // Same reason: the read-only view shows items and history.
@@ -194,7 +163,7 @@ export function TasksPage() {
       <div className="flex items-baseline gap-3 px-4 pt-4 pb-2">
         <h1 className="font-display text-[22px] font-bold tracking-tight text-foreground">Consignments</h1>
         <span className="font-mono text-[11px] text-muted-foreground">
-          <b className="font-semibold text-foreground">{rows.length}</b> shown · Lower Mainland · today
+          <b className="font-semibold text-foreground">{rows.length}</b> shown
         </span>
       </div>
 
@@ -266,7 +235,6 @@ export function TasksPage() {
         consignmentId={assignTaskId}
         currentDriverId={currentDriverId}
         onAssign={doAssign}
-        onNotify={actions.notify}
         pending={assigning}
       />
       <ChangeStatusModal open={!!statusId} task={statusTask} onClose={() => setStatusId(null)} onSave={doChangeStatus} />
@@ -278,10 +246,6 @@ export function TasksPage() {
         onChangeStatus={(id) => {
           setCardId(null);
           setStatusId(id);
-        }}
-        onDelete={(id) => {
-          setCardId(null);
-          onDelete(id);
         }}
       />
       <DriverLocationModal
@@ -298,12 +262,6 @@ export function TasksPage() {
           setViewId(null);
           setCardId(id);
         }}
-      />
-      <BulkUpdateModal
-        open={showBulkEdit}
-        count={selection.selected.length}
-        onClose={() => setShowBulkEdit(false)}
-        onSave={onBulkSave}
       />
       <TableSettingsModal
         open={showTableSettings}

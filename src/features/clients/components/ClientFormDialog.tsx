@@ -172,7 +172,7 @@ export function ClientFormDialog({
           }
         >
           <p className="text-[11px] text-muted-foreground">
-            Optional. When set, picking this client on a consignment prefills the sender.
+            Optional. Printed as the Bill To address on this client&apos;s invoices.
           </p>
 
           <AddressField

@@ -1,22 +1,19 @@
 import { describe, it, expect } from 'vitest';
 import {
-  BULK_STATUS_OPTIONS,
   TASK_STATUSES,
   STATUS_META,
   canTransition,
   changeStatusOptions,
   isEditable,
-  isInTab,
   isTaskStatus,
   isTaskTab,
   isTerminal,
 } from '../status';
-import { makeTask } from '@/test/factory';
 
 describe('status metadata', () => {
   it('has an entry for every status', () => {
     // The guard against the crash that used to take the whole Tasks route down:
-    // BulkUpdateModal and SearchPanel build option lists from these at module scope.
+    // SearchPanel builds its option list from these at module scope.
     for (const s of TASK_STATUSES) {
       expect(STATUS_META[s]).toBeDefined();
       expect(STATUS_META[s].label).toBeTruthy();
@@ -83,37 +80,13 @@ describe('changeStatusOptions', () => {
   });
 });
 
-describe('bulk status', () => {
-  it('is deliberately empty', () => {
-    // A single target is illegal across a mixed selection, so the field is
-    // removed from Bulk Update rather than left looking functional.
-    expect(BULK_STATUS_OPTIONS).toEqual([]);
-  });
-});
-
 describe('tabs', () => {
-  it('puts everything undelivered in Active', () => {
-    expect(isInTab(makeTask({ status: 'ASSIGNED' }), 'active')).toBe(true);
-    expect(isInTab(makeTask({ status: 'AT_PICKUP' }), 'active')).toBe(true);
-    expect(isInTab(makeTask({ status: 'DELIVERED' }), 'active')).toBe(false);
-  });
-
-  it('puts only delivered orders in Delivered', () => {
-    expect(isInTab(makeTask({ status: 'DELIVERED' }), 'delivered')).toBe(true);
-    expect(isInTab(makeTask({ status: 'PICKED_UP' }), 'delivered')).toBe(false);
-  });
-
-  it('uses the isNew flag for the New tab', () => {
-    expect(isInTab(makeTask({ isNew: true }), 'new')).toBe(true);
-    expect(isInTab(makeTask({ isNew: false }), 'new')).toBe(false);
-  });
-
-  it('survives a stale bookmarked tab instead of returning undefined', () => {
-    // ?tab=failed used to fall off the end of the switch and render a working
-    // page with an empty grid and no tab highlighted.
-    expect(isInTab(makeTask({}), 'failed' as never)).toBe(false);
-    expect(isTaskTab('failed')).toBe(false);
-    expect(isTaskTab('active')).toBe(true);
+  it('has one list and Search - the old status tabs are gone', () => {
+    expect(isTaskTab('all')).toBe(true);
+    expect(isTaskTab('search')).toBe(true);
+    expect(isTaskTab('active')).toBe(false);
+    expect(isTaskTab('delivered')).toBe(false);
+    expect(isTaskTab('new')).toBe(false);
   });
 });
 

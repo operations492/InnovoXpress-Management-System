@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { cn } from '@/lib/utils';
-import { Avatar, Icon, IconButton, Input } from '@/ui';
+import { Avatar, Icon } from '@/ui';
 import type { IconName } from '@/ui';
 import { useAuth } from '@/state/AuthProvider';
 import {
@@ -17,21 +17,18 @@ interface NavEntry {
   key: string;
   label: string;
   icon: IconName;
-  path?: string;
+  path: string;
   /** Hidden from anyone who is not an admin. */
   adminOnly?: boolean;
 }
 
-/** Top-level nav (Iris shell). Only Consignments, Chat, Map and Users are routed today. */
+/** Top-level nav (Iris shell). Every entry is a real route; Finance is the dropdown after them. */
 const NAV: NavEntry[] = [
-  { key: 'dashboard', label: 'Dashboard', icon: 'grid' },
   { key: 'consignments', label: 'Consignments', icon: 'package', path: '/tasks' },
-  { key: 'allocation', label: 'Allocation', icon: 'map' },
   { key: 'drivers', label: 'Drivers', icon: 'users', path: '/drivers' },
   { key: 'clients', label: 'Clients', icon: 'building', path: '/clients', adminOnly: true },
   { key: 'chat', label: 'Chat', icon: 'message', path: '/chat' },
   { key: 'map', label: 'Map', icon: 'map', path: '/map' },
-  { key: 'reports', label: 'Reports', icon: 'receipt' },
   { key: 'users', label: 'Users', icon: 'users', path: '/users', adminOnly: true },
 ];
 
@@ -63,12 +60,12 @@ export function TopNav() {
       {/* Primary nav */}
       <nav className="hidden items-center gap-0.5 md:flex">
         {nav.map((n) => {
-          const active = n.path ? pathname.startsWith(n.path) : false;
+          const active = pathname.startsWith(n.path);
           return (
             <button
               key={n.key}
               type="button"
-              onClick={() => n.path && navigate(n.path)}
+              onClick={() => navigate(n.path)}
               className={cn(
                 'relative rounded-md px-3 py-2 text-[13.5px] font-medium transition-colors',
                 active
@@ -99,6 +96,12 @@ export function TopNav() {
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-56">
+            {/* First, because billing is the thing people come to Finance for;
+                the catalogues below it are set up once and rarely revisited. */}
+            <DropdownMenuItem onSelect={() => navigate('/finance/invoices')}>
+              <Icon name="receipt" size={15} />
+              Invoices
+            </DropdownMenuItem>
             <DropdownMenuItem onSelect={() => navigate('/finance/additional-services')}>
               <Icon name="receipt" size={15} />
               Additional Services
@@ -115,21 +118,9 @@ export function TopNav() {
               <Icon name="map" size={15} />
               Service Zones
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => navigate('/finance/tax-rates')}>
-              <Icon name="receipt" size={15} />
-              Tax Rates
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => navigate('/finance/rate-levies')}>
-              <Icon name="sliders" size={15} />
-              Rate Levies
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => navigate('/finance/rate-plans')}>
+            <DropdownMenuItem onSelect={() => navigate('/finance/rate-cards')}>
               <Icon name="chart" size={15} />
-              Rate Plans
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => navigate('/finance/quote')}>
-              <Icon name="search" size={15} />
-              Quote Calculator
+              Rate Cards
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
@@ -137,16 +128,6 @@ export function TopNav() {
 
       <div className="flex-1" />
 
-      {/* Search + actions */}
-      <div className="hidden w-52 lg:block">
-        <Input icon={<Icon name="search" size={15} />} placeholder="Search" />
-      </div>
-      <IconButton title="Notifications" aria-label="Notifications">
-        <Icon name="bell" size={18} />
-      </IconButton>
-      <IconButton title="Settings" aria-label="Settings">
-        <Icon name="settings" size={18} />
-      </IconButton>
       {/* Who is signed in, and the only way to sign out. */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>

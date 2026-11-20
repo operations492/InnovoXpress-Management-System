@@ -13,7 +13,7 @@
  * beside where the driver actually is happens to be the decision being made.
  */
 import { useEffect, useMemo, useState } from 'react';
-import { Avatar, Button, Icon, Modal, Tabs } from '@/ui';
+import { Avatar, Button, Icon, Modal } from '@/ui';
 import { cn } from '@/lib/utils';
 import { formatDistance } from '@/domain/trail';
 import type { DriverRouteDto } from '@/lib/api';
@@ -35,7 +35,6 @@ interface DriverAssignPopoverProps {
   /** Driver id, not name — the API keys assignment by id. */
   currentDriverId?: string | null;
   onAssign: (driverId: string) => void;
-  onNotify: () => void;
   /** True while the assign request is in flight. */
   pending?: boolean;
 }
@@ -63,10 +62,8 @@ export function DriverAssignPopover({
   currentDriverId,
   pending,
   onAssign,
-  onNotify,
 }: DriverAssignPopoverProps) {
   const roster = useDrivers();
-  const [tab, setTab] = useState('manual');
   const [pick, setPick] = useState<string | null>(null);
 
   // Several orders have no single pickup to measure against, so the ranking and
@@ -89,7 +86,6 @@ export function DriverAssignPopover({
 
   useEffect(() => {
     if (open) {
-      setTab('manual');
       setPick(currentDriverId ?? null);
     }
   }, [open, currentDriverId]);
@@ -158,8 +154,8 @@ export function DriverAssignPopover({
 
   const maxLoad = Math.max(1, ...rows.map((r) => r.load));
   const selectedRow = rows.find((r) => r.id === pick) ?? null;
-  const canAct = tab === 'manual' && !!pick && !selectedRow?.offShift;
-  const showMap = single && tab === 'manual' && !!nearest.meta;
+  const canAct = !!pick && !selectedRow?.offShift;
+  const showMap = single && !!nearest.meta;
 
   return (
     <Modal
@@ -167,27 +163,12 @@ export function DriverAssignPopover({
       onClose={onClose}
       title="Assign Driver"
       width={showMap ? 960 : 420}
-      tabs={
-        <Tabs
-          value={tab}
-          onChange={setTab}
-          items={[
-            { value: 'manual', label: 'Manually Assign' },
-            { value: 'auto', label: 'Auto-Assign' },
-          ]}
-        />
-      }
       footer={
         <>
           <Button variant="utility" size="sm" onClick={onClose}>
             Cancel
           </Button>
           <div className="flex gap-2">
-            {canAct && (
-              <Button variant="utility" size="sm" onClick={onNotify}>
-                Notify
-              </Button>
-            )}
             {canAct && (
               <Button
                 variant="primary"
@@ -213,96 +194,87 @@ export function DriverAssignPopover({
         )}
       </div>
 
-      {tab === 'manual' ? (
-        <>
-          {bulk && (
-            <p className="mb-3 rounded-md bg-muted px-3 py-2.5 text-xs text-muted-foreground">
-              {taskCount} orders will be assigned to one driver. Any that can&apos;t be — already
-              collected, or moved on — are reported afterwards and the rest still go through.
-            </p>
-          )}
-
-          {nearest.unmappable && (
-            <p className="mb-3 rounded-md bg-warning/5 px-3 py-2.5 text-xs text-warning">
-              This order&apos;s pickup has no map pin, so drivers can&apos;t be ranked by distance.
-              Edit the order and set the pickup location to see drive times here.
-            </p>
-          )}
-
-          {/* Never let a straight-line number pass for a driving one: it ignores the
-              canal, the railway and every one-way street. */}
-          {nearest.meta?.source === 'straight-line' && (
-            <p className="mb-3 rounded-md bg-warning/5 px-3 py-2.5 text-xs text-warning">
-              {nearest.meta.warning ??
-                'Routing engine unavailable — distances are straight-line, not driving distance.'}
-            </p>
-          )}
-
-          {nearest.error && (
-            <p className="mb-3 rounded-md bg-danger/5 px-3 py-2.5 text-xs text-danger">
-              {nearest.error.message}
-            </p>
-          )}
-
-          <div className={cn('grid gap-4', showMap && 'lg:grid-cols-[340px_1fr]')}>
-            <div
-              className={cn(
-                'flex flex-col gap-0.5',
-                showMap && 'lg:max-h-[420px] lg:overflow-y-auto lg:pr-1',
-              )}
-            >
-              {nearest.isLoading && (
-                <p className="px-2 py-3 text-xs text-muted-foreground">Measuring drive times…</p>
-              )}
-
-              {rows.map((d) => (
-                <DriverRow
-                  key={d.id}
-                  row={d}
-                  rank={rankOf.get(d.id) ?? null}
-                  selected={pick === d.id}
-                  maxLoad={maxLoad}
-                  showTimes={single && !!nearest.meta}
-                  onSelect={() => !d.offShift && setPick(d.id)}
-                />
-              ))}
-
-              {rows.length === 0 && !nearest.isLoading && (
-                <p className="px-2 py-3 text-xs text-muted-foreground">
-                  No drivers are on shift right now.
-                </p>
-              )}
-            </div>
-
-            {showMap && nearest.meta && (
-              <div className="flex min-w-0 flex-col gap-3">
-                <div className="h-[280px] lg:h-[300px]">
-                  <DriverProximityMap
-                    pickup={nearest.meta.pickup}
-                    drivers={nearest.rows}
-                    selectedId={pick}
-                    onSelect={setPick}
-                    rankOf={rankOf}
-                    route={route?.available ? route.points : null}
-                  />
-                </div>
-                <RouteNote
-                  selected={!!pick}
-                  loading={routeLoading}
-                  route={route}
-                  offShift={!!selectedRow?.offShift}
-                />
-                <SelectedDriver row={selectedRow} />
-              </div>
-            )}
-          </div>
-        </>
-      ) : (
-        <div className="text-sm leading-relaxed text-body">
-          Auto-Assign distributes tasks to the nearest available drivers based on live load and
-          proximity. Configuration is managed in dispatch settings.
-        </div>
+      {bulk && (
+        <p className="mb-3 rounded-md bg-muted px-3 py-2.5 text-xs text-muted-foreground">
+          {taskCount} orders will be assigned to one driver. Any that can&apos;t be — already
+          collected, or moved on — are reported afterwards and the rest still go through.
+        </p>
       )}
+
+      {nearest.unmappable && (
+        <p className="mb-3 rounded-md bg-warning/5 px-3 py-2.5 text-xs text-warning">
+          This order&apos;s pickup has no map pin, so drivers can&apos;t be ranked by distance.
+          Edit the order and set the pickup location to see drive times here.
+        </p>
+      )}
+
+      {/* Never let a straight-line number pass for a driving one: it ignores the
+          canal, the railway and every one-way street. */}
+      {nearest.meta?.source === 'straight-line' && (
+        <p className="mb-3 rounded-md bg-warning/5 px-3 py-2.5 text-xs text-warning">
+          {nearest.meta.warning ??
+            'Routing engine unavailable — distances are straight-line, not driving distance.'}
+        </p>
+      )}
+
+      {nearest.error && (
+        <p className="mb-3 rounded-md bg-danger/5 px-3 py-2.5 text-xs text-danger">
+          {nearest.error.message}
+        </p>
+      )}
+
+      <div className={cn('grid gap-4', showMap && 'lg:grid-cols-[340px_1fr]')}>
+        <div
+          className={cn(
+            'flex flex-col gap-0.5',
+            showMap && 'lg:max-h-[420px] lg:overflow-y-auto lg:pr-1',
+          )}
+        >
+          {nearest.isLoading && (
+            <p className="px-2 py-3 text-xs text-muted-foreground">Measuring drive times…</p>
+          )}
+
+          {rows.map((d) => (
+            <DriverRow
+              key={d.id}
+              row={d}
+              rank={rankOf.get(d.id) ?? null}
+              selected={pick === d.id}
+              maxLoad={maxLoad}
+              showTimes={single && !!nearest.meta}
+              onSelect={() => !d.offShift && setPick(d.id)}
+            />
+          ))}
+
+          {rows.length === 0 && !nearest.isLoading && (
+            <p className="px-2 py-3 text-xs text-muted-foreground">
+              No drivers are on shift right now.
+            </p>
+          )}
+        </div>
+
+        {showMap && nearest.meta && (
+          <div className="flex min-w-0 flex-col gap-3">
+            <div className="h-[280px] lg:h-[300px]">
+              <DriverProximityMap
+                pickup={nearest.meta.pickup}
+                drivers={nearest.rows}
+                selectedId={pick}
+                onSelect={setPick}
+                rankOf={rankOf}
+                route={route?.available ? route.points : null}
+              />
+            </div>
+            <RouteNote
+              selected={!!pick}
+              loading={routeLoading}
+              route={route}
+              offShift={!!selectedRow?.offShift}
+            />
+            <SelectedDriver row={selectedRow} />
+          </div>
+        )}
+      </div>
     </Modal>
   );
 }

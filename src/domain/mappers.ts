@@ -2,16 +2,14 @@
  * Translation between the backend's normalised consignment and the flat `Task`
  * view-model the UI is built on.
  *
- * Three rules here are load-bearing and easy to get wrong:
+ * Two rules here are load-bearing and easy to get wrong:
  *
  * 1. The four `*Full` window stamps MUST be "YYYY-MM-DD h:mm AM/PM".
  *    `derive.matchDate` anchors a ^YYYY-MM-DD check for the date filter and runs
  *    a `h:mm AM/PM` regex for the time-of-day slider. A raw ISO string passes the
  *    first and silently disables the second.
- * 2. Money fields must be 0, never undefined — `derive.totals` sums them and
- *    `NaN` is rendered by format.money as a confident "$0.00".
- * 3. `items`, `requirements` and `history` must be arrays, never undefined —
- *    several modals call `.length` / `.map` on them without a guard.
+ * 2. `items` and `history` must be arrays, never undefined — several modals
+ *    call `.length` / `.map` on them without a guard.
  */
 import type { ConsignmentDto, ItemDto, TimelineDto } from '@/lib/api';
 import type { HistoryEvent, Task, TaskItem, TaskPriority, TaskType } from './types';
@@ -143,6 +141,8 @@ export interface SummaryRow {
   orderNo: string;
   clientReference: string | null;
   client: { id: string; name: string; code: string };
+  /** The typed customer on a Walk-in order; null otherwise. */
+  customerName: string | null;
   driver: { id: string; name: string } | null;
   serviceLevel: { id: string; name: string } | null;
   status: string;
@@ -193,11 +193,11 @@ function baseTask(src: {
   createdAt: string;
 }): Omit<
   Task,
-  | 'dest' | 'destBuilding' | 'destProvince' | 'destCity' | 'destPostcode' | 'destNotes'
+  | 'dest' | 'destProvince' | 'destCity' | 'destPostcode' | 'destNotes'
   | 'destLat' | 'destLng'
   | 'recipient' | 'recipientPhone' | 'recipientEmail'
   | 'requester' | 'requesterPhone' | 'requesterEmail'
-  | 'dispatchAddress' | 'dispatchBuilding' | 'dispatchProvince' | 'dispatchCity'
+  | 'dispatchAddress' | 'dispatchProvince' | 'dispatchCity'
   | 'dispatchPostcode' | 'dispatchNotes'
   | 'dispatchLat' | 'dispatchLng'
   | 'items' | 'history'
@@ -227,16 +227,13 @@ function baseTask(src: {
     deliverAfterFull: fullStamp(src.deliverAfter),
     deliverBeforeFull: fullStamp(src.deliverBefore),
     createdTime: shortStamp(src.createdAt),
-    // No money anywhere in this schema. Zero, never undefined.
-    feeNum: 0,
-    codNum: 0,
     attachments: 0,
-    requirements: [],
+    // Empty here and filled in by `detailToTask`: the grid row carries only a
+    // count of these, because pulling every name for every row would cost a
+    // join per page to render "2".
     additionalServices: [],
-    team: '',
     // "New" means nobody has picked it up yet — there is no backend flag.
     isNew: src.status === 'UNASSIGNED',
-    notification: true,
   };
 }
 
@@ -246,7 +243,8 @@ export function summaryToTask(row: SummaryRow): Task {
       id: row.id,
       orderNo: row.orderNo,
       clientReference: row.clientReference,
-      clientName: row.client.name,
+      // A Walk-in order shows the name the operator typed, not "Walk-in".
+      clientName: row.customerName ?? row.client.name,
       serviceLevel: row.serviceLevel,
       driverName: row.driver?.name ?? null,
       driverId: row.driver?.id ?? null,
@@ -261,7 +259,6 @@ export function summaryToTask(row: SummaryRow): Task {
       createdAt: row.createdAt,
     }),
     dest: row.receiverLine1,
-    destBuilding: '',
     destProvince: row.receiverProvince ?? '',
     destCity: row.receiverCity,
     destPostcode: '',
@@ -275,7 +272,6 @@ export function summaryToTask(row: SummaryRow): Task {
     requesterPhone: '',
     requesterEmail: '',
     dispatchAddress: row.senderLine1,
-    dispatchBuilding: '',
     dispatchProvince: row.senderProvince ?? '',
     dispatchCity: row.senderCity,
     dispatchPostcode: '',
@@ -294,7 +290,7 @@ export function detailToTask(dto: ConsignmentDto): Task {
       id: dto.id,
       orderNo: dto.orderNo,
       clientReference: dto.clientReference,
-      clientName: dto.client.name,
+      clientName: dto.customerName ?? dto.client.name,
       serviceLevel: dto.serviceLevel,
       driverName: dto.driver?.name ?? null,
       driverId: dto.driver?.id ?? null,
@@ -309,7 +305,6 @@ export function detailToTask(dto: ConsignmentDto): Task {
       createdAt: dto.createdAt,
     }),
     dest: dto.receiver.line1,
-    destBuilding: '',
     destProvince: dto.receiver.province ?? '',
     destCity: dto.receiver.city,
     destPostcode: dto.receiver.postcode ?? '',
@@ -323,13 +318,15 @@ export function detailToTask(dto: ConsignmentDto): Task {
     requesterPhone: dto.sender.phone ?? '',
     requesterEmail: dto.sender.email ?? '',
     dispatchAddress: dto.sender.line1,
-    dispatchBuilding: '',
     dispatchProvince: dto.sender.province ?? '',
     dispatchCity: dto.sender.city,
     dispatchPostcode: dto.sender.postcode ?? '',
     dispatchNotes: dto.sender.instructions ?? '',
     dispatchLat: dto.sender.lat ?? null,
     dispatchLng: dto.sender.lng ?? null,
+    // Ids, not names: this is what the API round-trips, and the form's picker
+    // resolves them to labels against the customer's own list.
+    additionalServices: (dto.additionalServices ?? []).map((s) => s.id),
     items: dto.items.map(itemToUi),
     history: dto.timeline.map(eventToUi),
   };
@@ -395,6 +392,11 @@ export function toConsignmentPayload(
   // "leave as is", which is the safe reading of a select nobody touched.
   if (values.serviceLevelId) payload.serviceLevelId = values.serviceLevelId;
 
+  // Sent unconditionally, unlike the service level: the tick-list is read and
+  // saved whole, so an empty array is a real answer ("none") and omitting it
+  // would make unticking the last charge impossible.
+  payload.additionalServiceIds = values.additionalServices;
+
   const pickupAfter = toIsoOrUndefined(values.pickupAfter);
   const pickupBefore = toIsoOrUndefined(values.pickupBefore);
   const deliverAfter = toIsoOrUndefined(values.deliverAfter);
@@ -406,13 +408,14 @@ export function toConsignmentPayload(
   if (deliverAfter) payload.deliverAfter = deliverAfter;
   if (deliverBefore) payload.deliverBefore = deliverBefore;
 
-  // Sent on create and on update alike: the API accepts a client change on an
-  // editable order and validates the id against the clients table.
-  const name = values.merchant;
-  if (!name || name === NO_CLIENT) throw new MappingError('Choose a client first');
-  const client = clients.find((c) => c.name === name);
-  if (!client) throw new MappingError(`Unknown client "${name}"`);
-  payload.clientId = client.id;
+  // The Client dropdown offers real customers or "No client". A picked customer
+  // sends its id; "No client" sends customerName: null, which the API files
+  // under the built-in Walk-in account so the order still gets a number. Sent
+  // on create and update alike, so changing the dropdown moves the order.
+  const name = values.merchant === NO_CLIENT ? '' : values.merchant.trim();
+  const client = name ? clients.find((c) => c.name === name) : undefined;
+  if (client) payload.clientId = client.id;
+  else payload.customerName = name || null;
 
   return payload;
 }

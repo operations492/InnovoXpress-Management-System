@@ -8,9 +8,10 @@
  * defaults are provided to `useForm` via the EMPTY_* constants below. Numeric item
  * fields are kept as strings (HTML inputs are strings) and parsed in `buildItem`.
  *
- * Which of these actually persist: see the table in the frontend README. Money,
- * crew, handling and additional services have no backend column — they are kept
- * so the form still works, but they are not sent.
+ * Every field in the task form is sent (see `toConsignmentPayload`). Fields with
+ * no backend column — money, crew, handling, building, notify, requirements —
+ * are deliberately absent rather than carried as values that never leave the
+ * browser.
  */
 import { z } from 'zod';
 
@@ -81,7 +82,6 @@ export const taskFormSchema = z.object({
   requesterPhone: z.string(),
   requesterEmail: z.string(),
   dispatchAddress: z.string(),
-  dispatchBuilding: z.string(),
   dispatchProvince: z.string(),
   dispatchCity: z.string(),
   dispatchPostcode: z.string(),
@@ -94,9 +94,7 @@ export const taskFormSchema = z.object({
   recipient: z.string(),
   recipientPhone: z.string(),
   recipientEmail: z.string(),
-  notification: z.boolean(),
   dest: z.string(),
-  destBuilding: z.string(),
   destProvince: z.string(),
   destCity: z.string(),
   destPostcode: z.string(),
@@ -114,13 +112,6 @@ export const taskFormSchema = z.object({
   deliverAfter: z.string().min(1),
   deliverBefore: z.string().min(1),
 
-  team: z.string(),
-  driver: z.string(),
-
-  requirementsLabel: z.string(),
-  dueAmount: z.string(),
-  shippingFee: z.string(),
-
   additionalServices: z.array(z.string()),
 });
 
@@ -130,14 +121,15 @@ export const EMPTY_TASK_FORM: TaskFormValues = {
   taskType: 'Pickup & Delivery',
   priority: 'Normal',
   externalId: '',
-  merchant: 'Client not selected',
+  // Blank, not a sentinel: the box is free text now, and a blank is a real
+  // answer (a Walk-in order with no name).
+  merchant: '',
   serviceLevelId: '',
   description: '',
   requester: '',
   requesterPhone: '',
   requesterEmail: '',
   dispatchAddress: '',
-  dispatchBuilding: '',
   dispatchProvince: '',
   dispatchCity: '',
   dispatchPostcode: '',
@@ -147,9 +139,7 @@ export const EMPTY_TASK_FORM: TaskFormValues = {
   recipient: '',
   recipientPhone: '',
   recipientEmail: '',
-  notification: true,
   dest: '',
-  destBuilding: '',
   destProvince: '',
   destCity: '',
   destPostcode: '',
@@ -157,11 +147,6 @@ export const EMPTY_TASK_FORM: TaskFormValues = {
   destLat: null,
   destLng: null,
   ...defaultWindows(),
-  team: 'Team not assigned',
-  driver: 'Driver not assigned',
-  requirementsLabel: 'None',
-  dueAmount: '',
-  shippingFee: '',
   additionalServices: [],
 };
 
@@ -174,7 +159,7 @@ export const NO_CLIENT = 'Client not selected';
  */
 export function missingRequired(v: TaskFormValues): string[] {
   const missing: string[] = [];
-  if (!v.merchant || v.merchant === NO_CLIENT) missing.push('Client');
+  // No client is required: an unpicked order is filed under Walk-in.
   // Required on create only: this runs for the new-order card, not the edit
   // modal, so an older order saved without a level can still be edited.
   if (!v.serviceLevelId) missing.push('Service level');

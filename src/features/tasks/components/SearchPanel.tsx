@@ -100,7 +100,7 @@ export function SearchPanel({ onView }: SearchPanelProps) {
   };
 
   const clear = () => {
-    setF(initialForm);
+    setF(EMPTY_SEARCH);
     setSubmitted(null);
     setPage(1);
   };

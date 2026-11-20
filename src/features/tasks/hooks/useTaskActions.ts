@@ -12,7 +12,6 @@ import { useToast } from '@/components/Toast';
 import { ApiError } from '@/lib/api';
 import { MappingError } from '@/domain/mappers';
 import type { TaskStatus } from '@/domain/status';
-import type { BulkPatch } from '@/domain/mutations';
 import type { TaskFormValues } from '@/domain/schemas';
 import type { Task, TaskItem } from '@/domain/types';
 
@@ -45,13 +44,8 @@ export function useTaskActions() {
         store.assign(ids, driverId);
       },
       unassign: (id: string) => store.unassign(id),
-      notify: () => flash('Driver notified'),
       changeStatus: (id: string, status: TaskStatus) => {
         store.changeStatus(id, status);
-      },
-      bulkUpdate: (ids: string[], _patch: BulkPatch) => {
-        void _patch;
-        flash(`Bulk update isn't saved yet — ${ids.length} task(s) unchanged`);
       },
       create: async (values: TaskFormValues, items: TaskItem[]): Promise<Task | null> => {
         try {
@@ -71,12 +65,6 @@ export function useTaskActions() {
           flash(`Could not save: ${reason(e)}`);
         }
       },
-      remove: (ids: string[]) => {
-        flash(`Deleting isn't available — ${ids.length} task(s) kept`);
-      },
-      label: () => flash('Shipping labels generated'),
-      docket: () => flash('Delivery dockets generated'),
-      download: () => flash('Export started'),
     }),
     [store, flash],
   );

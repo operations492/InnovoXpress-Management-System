@@ -1,10 +1,11 @@
 /**
  * The consignment store, backed by the real API.
  *
- * The public shape is unchanged from the fixture era on purpose — every consumer
- * (`useTasks`, `useTaskActions`, the modals) keeps working without edits. What
- * changed is underneath: a TanStack Query cache instead of a useReducer over
- * SEED_TASKS.
+ * The public shape is the fixture era's on purpose — every consumer (`useTasks`,
+ * `useTaskActions`, the modals) kept working without edits — minus bulk update
+ * and delete, which only ever had no-op bodies because the backend has neither.
+ * What changed is underneath: a TanStack Query cache instead of a useReducer
+ * over SEED_TASKS.
  *
  * Mutations do not hand-roll rollback. Each one invalidates the query on success
  * and lets the cache be the single source of truth; a failed write simply never
@@ -16,7 +17,6 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { Task, TaskItem } from '@/domain/types';
 import type { TaskStatus } from '@/domain/status';
-import type { BulkPatch } from '@/domain/mutations';
 import type { TaskFormValues } from '@/domain/schemas';
 import { detailToTask, summaryToTask, toConsignmentPayload } from '@/domain/mappers';
 import type { SummaryRow } from '@/domain/mappers';
@@ -35,10 +35,8 @@ interface TasksStore {
   assign: (ids: string[], driverId: string) => void;
   unassign: (id: string) => void;
   changeStatus: (id: string, status: TaskStatus) => void;
-  bulkUpdate: (ids: string[], patch: BulkPatch) => void;
   create: (values: TaskFormValues, items: TaskItem[]) => Promise<Task>;
   update: (id: string, values: TaskFormValues, items: TaskItem[]) => Promise<Task>;
-  remove: (ids: string[]) => void;
   assigning: boolean;
 }
 
@@ -118,10 +116,6 @@ export function TasksProvider({ children }: { children: ReactNode }) {
       unassign: (id) => unassignM.mutate(id),
       changeStatus: (id, status) => statusM.mutate({ id, status }),
 
-      // No backend equivalent — the bulk patch fields (money, crew, handling)
-      // have no columns. Kept so the modal still closes cleanly.
-      bulkUpdate: () => {},
-
       create: async (values, items) => {
         const dto = await createM.mutateAsync({ values, items });
         return detailToTask(dto);
@@ -131,9 +125,8 @@ export function TasksProvider({ children }: { children: ReactNode }) {
         return detailToTask(dto);
       },
 
-      // Deleting a consignment is not an API the backend exposes — orders are
-      // operational history, not rows to remove.
-      remove: () => {},
+      // There is no remove: deleting a consignment is not an API the backend
+      // exposes — orders are operational history, not rows to remove.
     }),
     [list.data, list.isLoading, list.error, assignM, unassignM, statusM, createM, updateM],
   );

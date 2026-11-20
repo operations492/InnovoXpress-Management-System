@@ -1,7 +1,12 @@
 import { useCallback, useMemo, useState } from 'react';
 import { COLUMNS } from '../tasks.types';
 
-/** Column visibility + order state for the table, driven by Table Settings. */
+/**
+ * Column visibility + order state for the table, driven by Table Settings. Held in
+ * memory and seeded from COLUMNS, so a column dropped from the registry can never
+ * linger as a ghost. If this is ever persisted, filter stored keys against COLUMNS
+ * on load.
+ */
 export function useTableColumns() {
   const [order, setOrder] = useState<string[]>(() => COLUMNS.map((c) => c.key));
   const [visible, setVisible] = useState<Record<string, boolean>>(() =>

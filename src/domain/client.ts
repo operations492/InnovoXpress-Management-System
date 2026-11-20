@@ -32,10 +32,6 @@ export function canEditCode(client: Client): boolean {
  * The address travels whole: every field below is written together or none is.
  * A street from one client carrying a pin from another is exactly the unroutable
  * order the API's all-or-nothing address rule exists to prevent.
- *
- * `dispatchBuilding` is deliberately absent. A client has no unit or dock to
- * give, and clearing a field the operator filled is a side effect they did not
- * ask for.
  */
 export function senderFromClient(client: ClientRefDto): Partial<TaskFormValues> | null {
   const a = client.address;

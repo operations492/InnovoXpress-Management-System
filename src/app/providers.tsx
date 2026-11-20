@@ -13,10 +13,6 @@ import { DispatchRealtimeProvider } from '@/store/DispatchRealtimeProvider';
 import { AdditionalServicesProvider } from '@/store/AdditionalServicesProvider';
 import { FreightItemsProvider } from '@/store/FreightItemsProvider';
 import { ServiceLevelsProvider } from '@/store/ServiceLevelsProvider';
-import { ServiceZonesProvider } from '@/store/ServiceZonesProvider';
-import { TaxRatesProvider } from '@/store/TaxRatesProvider';
-import { RateLeviesProvider } from '@/store/RateLeviesProvider';
-import { RatePlansProvider } from '@/store/RatePlansProvider';
 
 /**
  * Compose all app-wide providers.
@@ -59,13 +55,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
                     <AdditionalServicesProvider>
                       <FreightItemsProvider>
                         <ServiceLevelsProvider>
-                          <ServiceZonesProvider>
-                            <TaxRatesProvider>
-                              <RateLeviesProvider>
-                                <RatePlansProvider>{children}</RatePlansProvider>
-                              </RateLeviesProvider>
-                            </TaxRatesProvider>
-                          </ServiceZonesProvider>
+                          {children}
                         </ServiceLevelsProvider>
                       </FreightItemsProvider>
                     </AdditionalServicesProvider>

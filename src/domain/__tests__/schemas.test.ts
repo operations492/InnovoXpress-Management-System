@@ -78,8 +78,8 @@ describe('item description', () => {
 
 describe('consignment required fields', () => {
   it('lists everything missing on an empty form', () => {
+    // No 'Client': an order with no picked client is filed under Walk-in.
     expect(missingRequired(EMPTY_TASK_FORM)).toEqual([
-      'Client',
       'Service level',
       'Sender name',
       'Pickup address',

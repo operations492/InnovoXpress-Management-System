@@ -27,6 +27,8 @@ export function ServiceDetailPanel({
 }: ServiceDetailPanelProps) {
   const [name, setName] = useState(service?.name ?? '');
   const [active, setActive] = useState(service?.active ?? true);
+  // Held as strings so an empty box stays empty rather than becoming 0.
+  const [rate, setRate] = useState(service?.defaultRate == null ? '' : String(service.defaultRate));
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   if (mode === 'empty' || !service) {
@@ -45,7 +47,12 @@ export function ServiceDetailPanel({
   const valid = name.trim().length > 0;
   const save = () => {
     if (!valid) return;
-    onSubmit({ name: name.trim(), active });
+    onSubmit({
+      name: name.trim(),
+      active,
+      // Empty means "no standard price" — it has to be set on each rate card.
+      defaultRate: rate.trim() === '' ? null : Number(rate),
+    });
   };
 
   return (
@@ -78,6 +85,22 @@ export function ServiceDetailPanel({
               value={name}
               onChange={(e) => setName(e.target.value)}
             />
+          </label>
+
+          <label className="flex flex-col gap-1.5">
+            <span className="text-xs font-medium text-muted-foreground">Default rate ($)</span>
+            <Input
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="None"
+              value={rate}
+              onChange={(e) => setRate(e.target.value)}
+            />
+            <span className="text-[11px] text-muted-foreground">
+              What this charge is normally worth. A rate card can charge one customer something
+              else; leaving it empty means it must be priced on every card.
+            </span>
           </label>
 
           <label className="flex cursor-pointer items-center justify-between gap-3 rounded-md border border-border bg-muted/40 px-3 py-2.5">

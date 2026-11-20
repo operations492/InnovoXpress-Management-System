@@ -1,35 +1,25 @@
 /**
- * Task Card — the editable record modal with 5 tabs (Overview / Items / Attachments /
- * Invoice / History). Footer: Close · Linked Task List · More (tracking/label/docket/
- * change status/delete) · Save & Close.
+ * Task Card — the editable record modal: the order form with its Items card, no tabs.
+ * Attachments and History live in ViewTaskModal. Footer: Close · More (label/docket/
+ * POD report/change status) · Save & Close.
  */
 import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Button, Card, Icon, Modal, Popover, StatusChip, Tabs } from '@/ui';
-import { cn } from '@/lib/utils';
+import { Button, Card, Icon, Modal, Popover, StatusChip } from '@/ui';
 import { taskFormSchema } from '@/domain/schemas';
 import type { TaskFormValues } from '@/domain/schemas';
 import { defaultWindows, EMPTY_TASK_FORM } from '@/domain/schemas';
 import { taskToFormValues } from '@/domain/mutations';
-import { money } from '@/domain/format';
 import type { Task, TaskItem } from '@/domain/types';
 import { useToast } from '@/components/Toast';
 import { useItemsEditor } from '../hooks/useItemsEditor';
 import { TaskForm } from './TaskForm';
 import { ItemsEditor } from './ItemsEditor';
-import { OrderDocumentsCard } from './OrderDocumentsCard';
 import { api } from '@/lib/api';
 import { printDocument } from '@/lib/print';
 import { ItemModal } from './ItemModal';
-import { useClients } from '@/store/TasksProvider';
-
-const TABS = [
-  { value: 'overview', label: 'Overview' },
-  { value: 'attachments', label: 'Attachments' },
-  { value: 'invoice', label: 'Invoice' },
-  { value: 'history', label: 'History' },
-];
+import { useClients, useServiceLevels } from '@/store/TasksProvider';
 
 interface TaskCardModalProps {
   open: boolean;
@@ -37,36 +27,22 @@ interface TaskCardModalProps {
   onClose: () => void;
   onSave: (id: string, values: TaskFormValues, items: TaskItem[]) => void;
   onChangeStatus: (id: string) => void;
-  onDelete: (id: string) => void;
 }
 
-function InvoiceRow({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
-  return (
-    <div
-      className={cn(
-        'flex justify-between border-b py-2.5',
-        strong ? 'font-semibold text-foreground' : 'text-body',
-      )}
-    >
-      <span>{label}</span>
-      <span className="tnum">{value}</span>
-    </div>
-  );
-}
-
-export function TaskCardModal({ open, task, onClose, onSave, onChangeStatus, onDelete }: TaskCardModalProps) {
+export function TaskCardModal({ open, task, onClose, onSave, onChangeStatus }: TaskCardModalProps) {
   const { flash } = useToast();
   const clients = useClients();
+  // Passed so the edit window shows the Service level box too. It always loaded
+  // and saved the level; it simply never drew the control to change it.
+  const serviceLevelOptions = useServiceLevels().map((s) => ({ value: s.id, label: s.name }));
   const form = useForm<TaskFormValues>({ resolver: zodResolver(taskFormSchema), defaultValues: { ...EMPTY_TASK_FORM, ...defaultWindows() } });
   const items = useItemsEditor(task?.items ?? []);
-  const [tab, setTab] = useState('overview');
   const [moreOpen, setMoreOpen] = useState(false);
 
   useEffect(() => {
     if (open && task) {
       form.reset(taskToFormValues(task));
       items.reset(task.items);
-      setTab('overview');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, task]);
@@ -92,16 +68,12 @@ export function TaskCardModal({ open, task, onClose, onSave, onChangeStatus, onD
           <StatusChip status={task.status} />
         </span>
       }
-      tabs={<Tabs value={tab} onChange={setTab} items={TABS} />}
       footer={
         <>
           <Button variant="utility" size="sm" onClick={onClose}>
             Close
           </Button>
           <div className="flex gap-2">
-            <Button variant="ghost" size="sm" onClick={() => flash('Linked tasks')}>
-              Linked Task List
-            </Button>
             <Popover
               open={moreOpen}
               onClose={() => setMoreOpen(false)}
@@ -114,12 +86,6 @@ export function TaskCardModal({ open, task, onClose, onSave, onChangeStatus, onD
               }
             >
               <div className="py-1">
-                <button className="ix-reset-btn ix-menu-item" onClick={() => { setMoreOpen(false); flash('Opening tracking page'); }}>
-                  <Icon name="navigation" size={15} /> Open Tracking Page
-                </button>
-                <button className="ix-reset-btn ix-menu-item" onClick={() => { setMoreOpen(false); flash('Tracking link copied'); }}>
-                  <Icon name="map" size={15} /> Show Tracking Link
-                </button>
                 <button className="ix-reset-btn ix-menu-item" onClick={() => { setMoreOpen(false); printDocument(() => api.labelPdf(task.id), flash); }}>
                   <Icon name="receipt" size={15} /> Shipping Label
                 </button>
@@ -136,12 +102,6 @@ export function TaskCardModal({ open, task, onClose, onSave, onChangeStatus, onD
                 <button className="ix-reset-btn ix-menu-item" onClick={() => { setMoreOpen(false); onChangeStatus(task.id); }}>
                   <Icon name="refresh" size={15} /> Change Status
                 </button>
-                <button
-                  className="ix-reset-btn ix-menu-item text-destructive"
-                  onClick={() => { setMoreOpen(false); onDelete(task.id); }}
-                >
-                  <Icon name="trash" size={15} /> Delete
-                </button>
               </div>
             </Popover>
             <Button variant="primary" size="sm" onClick={submit}>
@@ -151,51 +111,21 @@ export function TaskCardModal({ open, task, onClose, onSave, onChangeStatus, onD
         </>
       }
     >
-      {tab === 'overview' && (
-        <TaskForm
-          form={form}
-          clients={clients}
-          itemsSlot={
-            <Card title="Items">
-              <ItemsEditor
-                items={items.items}
-                onAdd={items.openAdd}
-                onEdit={items.openEdit}
-                onDelete={items.remove}
-              />
-            </Card>
-          }
-        />
-      )}
-
-      {tab === 'attachments' && <OrderDocumentsCard consignmentId={task.id} />}
-
-      {tab === 'invoice' && (
-        <div>
-          <InvoiceRow label="Shipping Fee" value={money(task.feeNum)} />
-          <InvoiceRow label="Cash On Delivery (Due)" value={money(task.codNum)} />
-          <InvoiceRow label="Amount Due" value={money(task.codNum)} strong />
-        </div>
-      )}
-
-      {tab === 'history' && (
-        <div className="flex flex-col gap-3.5">
-          {task.history.length === 0 && <div className="text-muted-foreground">No history yet</div>}
-          {task.history.map((h, i) => (
-            <div key={i} className="flex gap-2.5">
-              <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-accent text-primary">
-                <Icon name={h.icon === 'note' ? 'note' : 'pin'} size={14} />
-              </div>
-              <div className="flex flex-col">
-                <span className="text-sm text-primary">{h.text}</span>
-                <span className="text-xs text-muted-foreground">
-                  {h.time} · {h.who}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+      <TaskForm
+        form={form}
+        clients={clients}
+        serviceLevelOptions={serviceLevelOptions}
+        itemsSlot={
+          <Card title="Items">
+            <ItemsEditor
+              items={items.items}
+              onAdd={items.openAdd}
+              onEdit={items.openEdit}
+              onDelete={items.remove}
+            />
+          </Card>
+        }
+      />
 
       <ItemModal
         open={items.open}

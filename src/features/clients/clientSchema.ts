@@ -7,8 +7,7 @@ import { z } from 'zod';
  * that a flat form cannot: the address is all-or-nothing. Leave every address
  * field blank and the client simply has no address. Touch any of them and line 1,
  * city and a map pin become required — those four are what `/api/clients` demands
- * *inside* the address object, and a half-filled address would prefill an order
- * nothing can route.
+ * *inside* the address object, so a half-filled one cannot be saved.
  *
  * Note that a *client's* address is validated where a consignment's is not: the
  * backend enforces a Canadian postcode shape, a province enum and a 2-6 character

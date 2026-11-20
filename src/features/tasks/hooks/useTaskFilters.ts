@@ -14,7 +14,9 @@ export function useTaskFilters() {
 
   const filters: TaskFilters = useMemo(
     () => ({
-      tab: (params.get('tab') as TaskTab) || 'active',
+      // Anything but 'search' is the list - including an old bookmarked
+      // ?tab=active / new / delivered, which would otherwise show an empty page.
+      tab: (params.get('tab') === 'search' ? 'search' : 'all') as TaskTab,
       tableQ: params.get('q') || '',
       dateFilter: params.get('date') || 'all',
       dateFrom: params.get('df') || null,
@@ -47,7 +49,7 @@ export function useTaskFilters() {
     [setParams],
   );
 
-  const setTab = useCallback((tab: string) => patch({ tab: tab === 'active' ? null : tab }), [patch]);
+  const setTab = useCallback((tab: string) => patch({ tab: tab === 'search' ? 'search' : null }), [patch]);
   const setTableQ = useCallback((q: string) => patch({ q }), [patch]);
 
   // Date: a preset resolves to an ISO range; a calendar pick is a single custom day.

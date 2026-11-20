@@ -72,56 +72,69 @@ export function ViewTaskModal({ open, task, onClose, onEdit, onTrack }: ViewTask
       onClose={onClose}
       width={1000}
       title={`Consignment ${task.orderNo || task.id}`}
-      tabs={<Tabs value={tab} onChange={setTab} items={TABS} />}
-      footer={
-        <>
-          {printError && (
-            <span className="mr-auto text-[11px] text-destructive">{printError}</span>
-          )}
-          <Button variant="utility" size="sm" onClick={onClose}>
-            Close
-          </Button>
-          <Button
-            variant="utility"
-            size="sm"
-            disabled={printing !== null}
-            onClick={() => void print('label')}
-          >
-            {printing === 'label' ? 'Opening…' : 'Print Labels'}
-          </Button>
-          <Button
-            variant="utility"
-            size="sm"
-            disabled={printing !== null}
-            onClick={() => void print('docket')}
-          >
-            {printing === 'docket' ? 'Opening…' : 'Print Docket'}
-          </Button>
-          {/*
-            Offered only once the job is proved. The endpoint is a 409 before
-            that, so hiding the button keeps the operator from meeting an error
-            that really just means "not yet" — the same reasoning as the driver
-            live-location button below.
-          */}
-          {task.status === 'DELIVERED' && (
+      /*
+        Every action sits on the tab row, not in the footer. With the tabs at the
+        top and the buttons at the bottom, an operator on the Proof of Delivery
+        tab had to look in two places for what to do with this order — and on a
+        tall order the buttons were a scroll away. The footer is left with Close
+        alone, the one thing that is not about the order.
+      */
+      tabs={
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <Tabs value={tab} onChange={setTab} items={TABS} />
+          <div className="flex flex-wrap items-center justify-end gap-2 py-1.5">
+            {printError && (
+              <span className="text-[11px] text-destructive">{printError}</span>
+            )}
             <Button
               variant="utility"
               size="sm"
               disabled={printing !== null}
-              onClick={() => void print('pod')}
+              onClick={() => void print('label')}
             >
-              {printing === 'pod' ? 'Opening…' : 'POD Report'}
+              {printing === 'label' ? 'Opening…' : 'Print Labels'}
             </Button>
-          )}
-          {task.driverAssigned && (
-            <Button variant="utility" size="sm" onClick={() => onTrack(task.id)}>
-              Driver live location
+            <Button
+              variant="utility"
+              size="sm"
+              disabled={printing !== null}
+              onClick={() => void print('docket')}
+            >
+              {printing === 'docket' ? 'Opening…' : 'Print Docket'}
             </Button>
-          )}
-          <Button variant="primary" size="sm" onClick={() => onEdit(task.id)}>
-            Edit Task
+            {/*
+              Offered only once the job is proved. The endpoint is a 409 before
+              that, so hiding the button keeps the operator from meeting an error
+              that really just means "not yet" — the same reasoning as the driver
+              live-location button below.
+            */}
+            {task.status === 'DELIVERED' && (
+              <Button
+                variant="utility"
+                size="sm"
+                disabled={printing !== null}
+                onClick={() => void print('pod')}
+              >
+                {printing === 'pod' ? 'Opening…' : 'POD Report'}
+              </Button>
+            )}
+            {task.driverAssigned && (
+              <Button variant="utility" size="sm" onClick={() => onTrack(task.id)}>
+                Driver live location
+              </Button>
+            )}
+            <Button variant="primary" size="sm" onClick={() => onEdit(task.id)}>
+              Edit Task
+            </Button>
+          </div>
+        </div>
+      }
+      footer={
+        <div className="flex justify-end">
+          <Button variant="utility" size="sm" onClick={onClose}>
+            Close
           </Button>
-        </>
+        </div>
       }
     >
       {tab === 'pod' ? (
@@ -162,7 +175,7 @@ export function ViewTaskModal({ open, task, onClose, onEdit, onTrack }: ViewTask
               </div>
             </DetailRow>
             <DetailRow label="Destination Location">{dash(task.dest)}</DetailRow>
-            <DetailRow label="Description">{dash(task.description)}</DetailRow>
+            <DetailRow label="Operator notes">{dash(task.description)}</DetailRow>
           </Card>
 
           <Card title="Items">

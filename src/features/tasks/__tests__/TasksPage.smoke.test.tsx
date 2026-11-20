@@ -97,10 +97,10 @@ describe('TasksPage (smoke)', () => {
   it('mounts the toolbar and tabs', async () => {
     renderPage();
     expect(screen.getAllByText(/New consignment/).length).toBeGreaterThan(0);
-    // "Active" appears on both the tab and the filter button, so match by role.
-    expect(screen.getByRole('tab', { name: /Active/ })).toBeInTheDocument();
-    expect(screen.getByRole('tab', { name: /Delivered/ })).toBeInTheDocument();
+    // One list and Search; the Active / New / Delivered tabs were folded in.
+    expect(screen.getByRole('tab', { name: /Consignments/ })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Search/ })).toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /Delivered/ })).toBeNull();
   });
 
   it('renders a row fetched from the API', async () => {

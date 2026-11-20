@@ -221,7 +221,6 @@ const open = (props: Partial<React.ComponentProps<typeof DriverAssignPopover>> =
         taskCount={1}
         consignmentId="c1"
         onAssign={() => {}}
-        onNotify={() => {}}
         {...props}
       />
     </AppProviders>,

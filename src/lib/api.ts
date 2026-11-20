@@ -136,10 +136,10 @@ export interface ClientDto {
 }
 
 /**
- * A client's default pickup address. It travels as one value object and comes
- * back null until it is complete enough to prefill an order *and* route it —
- * line1, city and both coordinates. The server collapses a partial address to
- * null rather than hand the form a street with no pin.
+ * A client's billing address — the Bill To block on their invoices. It travels
+ * as one value object and comes back null until it is complete: line1, city and
+ * both coordinates. The server collapses a partial address to null. It is no
+ * longer copied into a consignment's sender.
  */
 export interface ClientAddressDto {
   contactName: string | null;
@@ -155,8 +155,9 @@ export interface ClientAddressDto {
 }
 
 /**
- * A client as /api/reference lists it: the dropdown shape plus the address, so
- * the consignment form can prefill its sender without a request per client.
+ * A client as /api/reference lists it: the dropdown shape plus the address.
+ * The consignment form uses it for the Client dropdown only; the address is
+ * not copied into the order.
  */
 export interface ClientRefDto extends ClientDto {
   address: ClientAddressDto | null;
@@ -455,6 +456,8 @@ export interface ConsignmentDto {
   orderNo: string;
   clientReference: string | null;
   client: ClientDto;
+  /** The typed customer on a Walk-in order; null otherwise. Show `customerName ?? client.name`. */
+  customerName: string | null;
   driver: { id: string; name: string; code: string | null; mobile: string | null } | null;
   status: string;
   statusLabel: string;
@@ -472,6 +475,13 @@ export interface ConsignmentDto {
   generalNote: string | null;
   /** The chosen level, or null. A retired level still comes back on old orders. */
   serviceLevel: { id: string; name: string } | null;
+  /** What is being carried, for pricing. Null until someone classifies it. */
+  freightItem: { id: string; name: string } | null;
+  /**
+   * Accessorials ticked for this job — names only. What each costs is the
+   * rate card's business, resolved when the order is invoiced.
+   */
+  additionalServices: Array<{ id: string; name: string }>;
   items: ItemDto[];
   totals: ItemTotalsDto;
   proofs: Array<{ leg: string; capturedAt: string }>;
@@ -832,25 +842,160 @@ export const api = {
 
   deleteClient: (id: string) => del<void>(`/api/clients/${id}`),
 
-  // --- catalogues the rate plan prices -------------------------------------
-  // --- rate plans and the quote calculator ---------------------------------
-  listRatePlans: (params: { clientId?: string; includeInactive?: boolean } = {}) => {
+  // --- catalogues a rate card prices ---------------------------------------
+  // --- zone lists ----------------------------------------------------------
+  listZoneLists: (params: { includeInactive?: boolean } = {}) =>
+    get<ZoneListDto[]>(`/api/zone-lists${params.includeInactive ? '?includeInactive=true' : ''}`),
+  getZoneList: (id: string, params: { includeInactive?: boolean } = {}) =>
+    get<ZoneListDetailDto>(
+      `/api/zone-lists/${id}${params.includeInactive ? '?includeInactive=true' : ''}`,
+    ),
+  createZoneList: (body: { name: string; description?: string }) =>
+    post<ZoneListDto>('/api/zone-lists', body),
+  updateZoneList: (
+    id: string,
+    body: { name?: string; description?: string | null; active?: boolean },
+  ) => patch<ZoneListDto>(`/api/zone-lists/${id}`, body),
+  deleteZoneList: (id: string) => del<void>(`/api/zone-lists/${id}`),
+
+  createZone: (listId: string, body: { name: string; shortName?: string }) =>
+    post<ZoneDto>(`/api/zone-lists/${listId}/zones`, body),
+  getZone: (listId: string, zoneId: string) =>
+    get<ZoneDetailDto>(`/api/zone-lists/${listId}/zones/${zoneId}`),
+  updateZone: (
+    listId: string,
+    zoneId: string,
+    body: { name?: string; shortName?: string | null; active?: boolean },
+  ) => patch<ZoneDto>(`/api/zone-lists/${listId}/zones/${zoneId}`, body),
+  /** Deactivates instead when a rate card prices the zone — `deleted` says which. */
+  deleteZone: (listId: string, zoneId: string) =>
+    del<{ deleted: boolean; zone?: ZoneDto }>(`/api/zone-lists/${listId}/zones/${zoneId}`),
+
+  // --- the postal codes inside a zone --------------------------------------
+  previewZoneCodes: (listId: string, zoneId: string, text: string) =>
+    post<ZoneCodePreviewDto>(`/api/zone-lists/${listId}/zones/${zoneId}/codes/preview`, { text }),
+  saveZoneCodes: (listId: string, zoneId: string, text: string) =>
+    put<ZoneCodeSaveDto>(`/api/zone-lists/${listId}/zones/${zoneId}/codes`, { text }),
+  deleteZoneCode: (listId: string, zoneId: string, code: string) =>
+    del<void>(`/api/zone-lists/${listId}/zones/${zoneId}/codes/${encodeURIComponent(code)}`),
+
+  // --- the drawn shape ------------------------------------------------------
+  previewZoneShape: (listId: string, zoneId: string, geojson: ZoneGeoJson) =>
+    post<ZoneShapePreviewDto>(`/api/zone-lists/${listId}/zones/${zoneId}/shape/preview`, {
+      geojson,
+    }),
+  saveZoneShape: (listId: string, zoneId: string, geojson: ZoneGeoJson, codes: string[]) =>
+    put<ZoneShapeSaveDto>(`/api/zone-lists/${listId}/zones/${zoneId}/shape`, { geojson, codes }),
+  deleteZoneShape: (listId: string, zoneId: string) =>
+    del<void>(`/api/zone-lists/${listId}/zones/${zoneId}/shape`),
+
+  // --- rate cards -----------------------------------------------------------
+  listRateCards: (params: { clientId?: string; includeInactive?: boolean } = {}) => {
     const q = new URLSearchParams();
     if (params.clientId) q.set('clientId', params.clientId);
     if (params.includeInactive) q.set('includeInactive', 'true');
     const qs = q.toString();
-    return get<RatePlanDto[]>(`/api/rate-plans${qs ? `?${qs}` : ''}`);
+    return get<RateCardDto[]>(`/api/rate-cards${qs ? `?${qs}` : ''}`);
   },
-  getRatePlan: (id: string) => get<RatePlanDetailDto>(`/api/rate-plans/${id}`),
-  createRatePlan: (body: CreateRatePlanPayload) => post<RatePlanDto>('/api/rate-plans', body),
-  updateRatePlan: (id: string, body: UpdateRatePlanPayload) =>
-    patch<RatePlanDto>(`/api/rate-plans/${id}`, body),
-  setRatePlanItems: (id: string, body: SetRatePlanItemsPayload) =>
-    put<RatePlanDetailDto>(`/api/rate-plans/${id}/items`, body),
-  deleteRatePlan: (id: string) => del<void>(`/api/rate-plans/${id}`),
+  getRateCard: (id: string) => get<RateCardDetailDto>(`/api/rate-cards/${id}`),
 
-  previewInvoice: (body: InvoicePreviewPayload) =>
+  /**
+   * The accessorials this customer can be charged, for the order form.
+   * AFTER_HOURS charges are excluded server-side: the system decides those.
+   */
+  listClientServices: (clientId: string) =>
+    get<ClientServicesDto>(`/api/consignments/services/${clientId}`),
+
+  /* ----------------------------------------------------------- invoices */
+
+  listInvoices: (
+    params: { clientId?: string; status?: InvoiceStatusDto; from?: string; to?: string; q?: string } = {},
+  ) => {
+    const qs = new URLSearchParams();
+    for (const [k, v] of Object.entries(params)) if (v) qs.set(k, v);
+    const s = qs.toString();
+    return get<InvoiceDto[]>(`/api/invoices${s ? `?${s}` : ''}`);
+  },
+
+  /** Reads only: prices every candidate and stores nothing. */
+  previewInvoice: (body: { clientId: string; from: string; to: string }) =>
     post<InvoicePreviewDto>('/api/invoices/preview', body),
+
+  createInvoice: (body: { clientId: string; consignmentIds: string[]; invoiceDate?: string }) =>
+    post<InvoiceDetailDto>('/api/invoices', body),
+
+  getInvoice: (id: string) => get<InvoiceDetailDto>(`/api/invoices/${id}`),
+
+  // Every invoice mutation answers with the whole invoice: one edit moves the
+  // line, the levy, the tax and five header figures, so anything smaller would
+  // only have to be reassembled here.
+  updateInvoice: (
+    id: string,
+    body: {
+      status?: 'OPEN' | 'CLOSED';
+      /** `YYYY-MM-DD`. The server coerces; it refuses once approved. */
+      invoiceDate?: string;
+      dueDate?: string;
+      notes?: string | null;
+    },
+  ) => patch<InvoiceDetailDto>(`/api/invoices/${id}`, body),
+
+  approveInvoice: (id: string) => post<InvoiceDetailDto>(`/api/invoices/${id}/approve`),
+  unapproveInvoice: (id: string) => post<InvoiceDetailDto>(`/api/invoices/${id}/unapprove`),
+  deleteInvoice: (id: string) => del<void>(`/api/invoices/${id}`),
+
+  addInvoiceLines: (id: string, consignmentIds: string[]) =>
+    post<InvoiceDetailDto>(`/api/invoices/${id}/lines`, { consignmentIds }),
+  removeInvoiceLine: (id: string, lineId: string) =>
+    del<InvoiceDetailDto>(`/api/invoices/${id}/lines/${lineId}`),
+  editInvoiceLine: (id: string, lineId: string, body: EditInvoiceLinePayload) =>
+    patch<InvoiceDetailDto>(`/api/invoices/${id}/lines/${lineId}`, body),
+  repriceInvoiceLine: (id: string, lineId: string) =>
+    post<InvoiceDetailDto>(`/api/invoices/${id}/lines/${lineId}/reprice`),
+
+  invoicePdf: (id: string) => getBlob(`/api/invoices/${id}/invoice.pdf`),
+
+  /**
+   * Email the invoice with its PDF attached. Refused (409) unless it is
+   * Approved & Locked with at least one consignment; 503 if the server has no
+   * email settings; 502 with a readable reason if the mail server says no.
+   */
+  sendInvoice: (id: string, body: { to: string[]; cc?: string[]; message?: string }) =>
+    post<InvoiceDetailDto>(`/api/invoices/${id}/send`, body),
+
+  getFinanceSettings: () => get<FinanceSettingsDto>('/api/invoices/settings'),
+  updateFinanceSettings: (body: Partial<FinanceSettingsDto>) =>
+    put<FinanceSettingsDto>('/api/invoices/settings', body),
+  createRateCard: (body: CreateRateCardPayload) => post<RateCardDto>('/api/rate-cards', body),
+  updateRateCard: (id: string, body: UpdateRateCardPayload) =>
+    patch<RateCardDto>(`/api/rate-cards/${id}`, body),
+  deleteRateCard: (id: string) => del<void>(`/api/rate-cards/${id}`),
+  /** A dry run. Reads only — nothing is stored, nothing is reserved. */
+  quoteRateCard: (id: string, body: QuotePayload) =>
+    post<RateCardQuoteDto>(`/api/rate-cards/${id}/quote`, body),
+
+  listRouteRates: (
+    id: string,
+    params: { serviceLevelId?: string; freightItemId?: string } = {},
+  ) => {
+    const q = new URLSearchParams();
+    if (params.serviceLevelId) q.set('serviceLevelId', params.serviceLevelId);
+    if (params.freightItemId) q.set('freightItemId', params.freightItemId);
+    const qs = q.toString();
+    return get<RouteRateDto[]>(`/api/rate-cards/${id}/rates${qs ? `?${qs}` : ''}`);
+  },
+  /** Writes one cell of the grid whole; the five numbers are read together. */
+  putRouteRate: (id: string, body: PutRouteRatePayload) =>
+    put<RouteRateDto>(`/api/rate-cards/${id}/rates`, body),
+  deleteRouteRate: (id: string, rateId: string) =>
+    del<void>(`/api/rate-cards/${id}/rates/${rateId}`),
+
+  /** Accessorials. Every write returns the whole list, which the dialog renders. */
+  listCardServices: (id: string) => get<CardServiceDto[]>(`/api/rate-cards/${id}/services`),
+  putCardService: (id: string, body: PutCardServicePayload) =>
+    put<CardServiceDto[]>(`/api/rate-cards/${id}/services`, body),
+  resetCardService: (id: string, serviceId: string) =>
+    del<CardServiceDto[]>(`/api/rate-cards/${id}/services/${serviceId}`),
 
   listAdditionalServices: (params: { includeInactive?: boolean } = {}) =>
     get<AdditionalServiceDto[]>(`/api/additional-services${params.includeInactive ? '?includeInactive=true' : ''}`),
@@ -1156,22 +1301,68 @@ export const api = {
  * shape as service levels. The rate plan is what attaches a price to them, so
  * no rate lives on the entry itself.
  */
+/**
+ * How a charge reaches a job. `MANUAL` is ticked by an operator; `AFTER_HOURS`
+ * is applied by the system from the job's own time and is never offered as a
+ * tick box. There is exactly one of the latter.
+ */
+export type ServiceTriggerDto = 'MANUAL' | 'AFTER_HOURS';
+
+/** Ordinary working hours as "HH:MM". A window is both ends or neither. */
+export interface ServiceHoursDto {
+  weekdayFrom: string | null;
+  weekdayTo: string | null;
+  weekendFrom: string | null;
+  weekendTo: string | null;
+}
+
 export interface AdditionalServiceDto {
   id: string;
   name: string;
   active: boolean;
   sortOrder: number;
+  /** What the charge is normally worth. Null means it must be priced per card. */
+  defaultRate: number | null;
+  trigger: ServiceTriggerDto;
+  /** Always present; every field is null on a charge an operator ticks. */
+  hours: ServiceHoursDto;
   createdAt: string;
   updatedAt: string;
 }
 export interface CreateAdditionalServicePayload {
   name: string;
   sortOrder?: number;
+  defaultRate?: number | null;
 }
 export interface UpdateAdditionalServicePayload {
   name?: string;
   sortOrder?: number;
   active?: boolean;
+  defaultRate?: number | null;
+  /** Rejected on a MANUAL charge; null clears both windows. */
+  hours?: ServiceHoursDto | null;
+}
+
+/**
+ * One additional service as a rate card sees it: the catalogue price, this
+ * card's override if it has one, and what the customer actually pays.
+ */
+export interface CardServiceDto {
+  id: string;
+  name: string;
+  defaultRate: number | null;
+  /** `AFTER_HOURS` charges are applied by the system, never ticked by hand. */
+  trigger: ServiceTriggerDto;
+  /** Null when this card charges the catalogue price. */
+  override: { rate: number | null } | null;
+  /** The override where there is one, the catalogue default where there is not. */
+  effective: { rate: number | null };
+}
+
+/** Sending `rate: null` removes the override and restores the default. */
+export interface PutCardServicePayload {
+  additionalServiceId: string;
+  rate?: number | null;
 }
 
 export interface FreightItemDto {
@@ -1198,98 +1389,414 @@ export interface UpdateFreightItemPayload {
  * editor pins blockKm to 1, so it is a per-km rate in practice. Blocks
  * are charged whole. One plan per client may be active at a time.
  */
-export interface RatePlanDto {
+export type ZoneCodeType = 'FSA' | 'FULL';
+/** Typed into the box by hand, or produced by drawing a shape on the map. */
+export type ZoneCodeSource = 'TYPED' | 'MAP';
+
+export interface ZoneListDto {
   id: string;
-  clientId: string;
-  client: { id: string; name: string; code: string };
   name: string;
+  description: string | null;
   active: boolean;
-  currency: string;
-  baseRate: number;
-  includedKm: number;
-  blockKm: number;
-  blockRate: number;
+  zoneCount: number;
+  codeCount: number;
   createdAt: string;
   updatedAt: string;
 }
 
-/** One catalogue entry in the grid. `price: null` means not priced for this client. */
-export interface RatePlanPriceDto {
+export interface ZoneDto {
+  id: string;
+  zoneListId: string;
+  name: string;
+  shortName: string | null;
+  active: boolean;
+  codeCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ZoneListDetailDto extends ZoneListDto {
+  zones: ZoneDto[];
+}
+
+export interface ZoneCodeDto {
+  id: string;
+  code: string;
+  codeType: ZoneCodeType;
+  source: ZoneCodeSource;
+}
+
+/** GeoJSON geometry only — what Leaflet's `toGeoJSON().geometry` gives you. */
+export interface ZoneGeoJson {
+  type: 'Polygon' | 'MultiPolygon';
+  coordinates: unknown[];
+}
+
+export interface ZoneShapeDto {
+  geojson: ZoneGeoJson;
+  updatedAt: string;
+}
+
+export interface ZoneDetailDto extends ZoneDto {
+  codes: ZoneCodeDto[];
+  shape: ZoneShapeDto | null;
+}
+
+/** A code another zone of the same list already holds. Saving is blocked on these. */
+export interface ZoneCodeConflictDto {
+  code: string;
+  zoneId: string;
+  zoneName: string;
+}
+
+export interface ZoneCodePreviewDto {
+  valid: Array<{ code: string; codeType: ZoneCodeType }>;
+  invalid: string[];
+  duplicates: string[];
+  conflicts: ZoneCodeConflictDto[];
+  savable: number;
+}
+
+export interface ZoneCodeSaveDto extends ZoneCodePreviewDto {
+  codes: ZoneCodeDto[];
+}
+
+/*
+ * Drawing a shape returns FSAs, not six-character codes: the free StatCan
+ * boundary file describes FSAs only. `partial` is offered unticked because
+ * narrowing a clipped FSA needs Canada Post's licensed point data — taking the
+ * whole thing would claim streets nobody drew.
+ */
+export interface ZoneShapePreviewDto {
+  /** `part` is which drawn area caught the code, numbered from 1. */
+  inside: Array<{ code: string; coveragePct: number; part: number }>;
+  partial: Array<{ code: string; coveragePct: number; part: number }>;
+  conflicts: ZoneCodeConflictDto[];
+}
+
+export interface ZoneShapeSaveDto {
+  shape: ZoneShapeDto;
+  codes: ZoneCodeDto[];
+}
+
+/* --- rate cards ---------------------------------------------------------- */
+
+/* ------------------------------------------------------------------ invoices */
+
+/** What a customer can be charged on top of the freight, priced for them. */
+export interface ClientServiceDto {
   id: string;
   name: string;
-  price: number | null;
+  /** Their rate-card price when they have one, else the catalogue's. */
+  rate: number;
+  /** True when this customer has negotiated away from the standard price. */
+  override: boolean;
 }
 
-/** GET /api/rate-plans/:id — the plan plus every active catalogue entry, priced or not. */
-export interface RatePlanDetailDto extends RatePlanDto {
-  serviceLevels: RatePlanPriceDto[];
-  additionalServices: RatePlanPriceDto[];
-  freightItems: RatePlanPriceDto[];
+export interface ClientServicesDto {
+  rateCard: { id: string; name: string } | null;
+  /** Why the list is empty. Null when it is not. */
+  problem: string | null;
+  services: ClientServiceDto[];
+  /** Service levels this customer's card prices. No price: that needs the zone and freight. */
+  serviceLevels: Array<{ id: string; name: string }>;
 }
 
-export interface CreateRatePlanPayload {
-  name: string;
-  clientId: string;
-  /** Defaults true; false drafts a replacement while the current plan stays live. */
-  active?: boolean;
-}
+export type InvoiceStatusDto = 'OPEN' | 'CLOSED' | 'APPROVED';
 
-export interface UpdateRatePlanPayload {
-  name?: string;
-  active?: boolean;
-  currency?: string;
-  baseRate?: number;
-  includedKm?: number;
-  blockKm?: number;
-  blockRate?: number;
-}
-
-/** The whole grid. Rows left out are not priced; a row at 0 is deliberately free. */
-export interface SetRatePlanItemsPayload {
-  items: Array<{
-    serviceLevelId?: string;
-    additionalServiceId?: string;
-    freightItemId?: string;
-    price: number;
-  }>;
-}
-
-/* --- quote calculator ----------------------------------------------------
- * distanceKm is supplied by the operator, not derived: OSRM degrades to
- * straight-line distance when unreachable, which is fine on a map and wrong on
- * an invoice. Nothing is saved — this is a preview.
+/**
+ * What a price row *is*, as opposed to what it is called. The UI keys off this
+ * rather than the label, so a renamed levy still renders as a levy and still
+ * refuses to be edited.
  */
-export interface InvoicePreviewPayload {
-  clientId: string;
-  distanceKm: number;
-  serviceLevelId?: string;
-  additionalServiceIds?: string[];
-  freightItems?: Array<{ id: string; qty: number }>;
+export type PriceLineKindDto =
+  | 'BASE'
+  | 'DISTANCE'
+  | 'WAITING'
+  | 'SERVICE'
+  | 'LEVY'
+  | 'TAX'
+  | 'MANUAL';
+
+export interface InvoicePriceLineDto {
+  id: string;
+  kind: PriceLineKindDto;
+  key: string;
+  label: string;
+  detail: string | null;
+  amount: number;
+  sortOrder: number;
+  /** Only the carriage rows. Levy and tax are computed and never typed over. */
+  editable: boolean;
+}
+
+export interface InvoicedPartyDto {
+  name: string;
+  line1: string;
+  city: string;
+  province: string | null;
+  postcode: string | null;
 }
 
 export interface InvoiceLineDto {
-  kind: 'BASE' | 'DISTANCE' | 'SERVICE_LEVEL' | 'ADDITIONAL_SERVICE' | 'FREIGHT_ITEM';
-  label: string;
-  qty?: number;
-  unitPrice?: number;
-  amount: number;
-  /** The arithmetic behind the line, e.g. how a distance rounded to whole blocks. */
-  note?: string;
+  id: string;
+  consignment: {
+    id: string;
+    orderNo: string;
+    clientReference: string | null;
+    status: string;
+    deliveredAt: string | null;
+    pickedUpAt: string | null;
+    date: string;
+    sender: InvoicedPartyDto;
+    receiver: InvoicedPartyDto;
+    qty: number;
+    weightLb: number;
+    items: Array<{ qty: number; description: string; weightLb: number | null }>;
+  };
+  rateCardId: string | null;
+  levyPct: number;
+  distanceKm: number | null;
+  waitMinutes: number | null;
+  baseAmount: number;
+  serviceAmount: number;
+  levyAmount: number;
+  taxAmount: number;
+  grandTotal: number;
+  ratingNotes: string | null;
+  /** True once someone overrode an amount. Reprice clears it. */
+  edited: boolean;
+  priceLines: InvoicePriceLineDto[];
+}
+
+export interface InvoiceDto {
+  id: string;
+  number: string;
+  client: ClientDto;
+  /** `email` is the customer's saved address; it pre-fills Send invoice. */
+  billTo: { name: string; email: string | null; line1: string | null; cityLine: string };
+  invoiceDate: string;
+  dueDate: string;
+  status: InvoiceStatusDto;
+  currency: string;
+  taxPct: number;
+  baseTotal: number;
+  serviceTotal: number;
+  levyTotal: number;
+  taxTotal: number;
+  grandTotal: number;
+  notes: string | null;
+  createdAt: string;
+  createdBy: { id: string; email: string } | null;
+  approvedBy: { id: string; email: string } | null;
+  approvedAt: string | null;
+  consignmentCount: number;
+}
+
+/** One email of an invoice, as the server recorded it after it was accepted. */
+export interface InvoiceSendDto {
+  id: string;
+  to: string[];
+  cc: string[];
+  sentAt: string;
+  /** Email of the operator who sent it. */
+  sentBy: string;
+}
+
+export interface InvoiceDetailDto extends InvoiceDto {
+  lines: InvoiceLineDto[];
+  /** Every send, newest first. Empty until the invoice has been emailed. */
+  sends: InvoiceSendDto[];
+  /** One entry per distinct levy rate, which is how the PDF prints them. */
+  levyBreakdown: Array<{ pct: number; amount: number; label: string }>;
+  totalQty: number;
+  totalWeightLb: number;
+}
+
+/** A candidate job, priced but not committed to anything. */
+export interface InvoiceableJobDto {
+  consignmentId: string;
+  orderNo: string;
+  ok: boolean;
+  /** Why it cannot be priced. Listed anyway, so nothing vanishes silently. */
+  problem: string | null;
+  clientReference: string | null;
+  deliveredAt: string | null;
+  senderName: string;
+  receiverName: string;
+  receiverCity: string;
+  qty: number;
+  weightLb: number;
+  levyPct: number;
+  distanceKm: number | null;
+  waitMinutes: number | null;
+  baseAmount: number;
+  serviceAmount: number;
+  levyAmount: number;
+  taxAmount: number;
+  grandTotal: number;
+  warnings: string[];
 }
 
 export interface InvoicePreviewDto {
+  client: { id: string; name: string; code: string; taxExempt: boolean };
+  taxPct: number;
+  jobs: InvoiceableJobDto[];
+  totals: {
+    count: number;
+    baseTotal: number;
+    serviceTotal: number;
+    levyTotal: number;
+    taxTotal: number;
+    grandTotal: number;
+  };
+}
+
+export interface FinanceSettingsDto {
+  taxPct: number;
+  invoicePrefix: string;
+  invoiceNextNumber: number;
+}
+
+export interface EditInvoiceLinePayload {
+  baseAmount?: number;
+  distanceAmount?: number;
+  waitingAmount?: number;
+  /**
+   * Corrections to individual service charges, keyed by the price line's key.
+   * Only charges an operator ticked are accepted; one the system added from
+   * the clock is refused rather than silently ignored.
+   */
+  serviceAmounts?: Array<{ key: string; amount: number }>;
+  /** Replaces every manual line, so removing one is expressible. */
+  manualLines?: Array<{ label: string; amount: number }>;
+}
+
+export interface RateCardDto {
+  id: string;
+  name: string;
   client: { id: string; name: string; code: string };
-  ratePlan: { id: string; name: string };
+  zoneList: { id: string; name: string };
+  /** ISO dates. Two active cards for one customer may not overlap. */
+  validFrom: string;
+  validTo: string;
   currency: string;
-  distanceKm: number;
-  basis: { baseRate: number; includedKm: number; blockKm: number; blockRate: number };
-  lines: InvoiceLineDto[];
-  subtotal: number;
-  tax: { label: string; rate: number; amount: number };
-  total: number;
-  /** Selected but unpriced entries, charged as 0 and called out. */
+  active: boolean;
+  memo: string | null;
+  /** A percentage, 50 meaning 50%. Charged on the base price, never on extras. */
+  levyPct: number;
+  rateCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** The five numbers for one destination. Where a job starts does not price it. */
+export interface RouteRateDto {
+  id: string;
+  serviceLevel: { id: string; name: string };
+  freightItem: { id: string; name: string };
+  toZone: { id: string; name: string };
+  baseRate: number;
+  freeKm: number;
+  ratePerKm: number;
+  freeWaitMinutes: number;
+  waitRatePerMinute: number;
+  active: boolean;
+  updatedAt: string;
+}
+
+/** One row of a test quote's receipt, already worked out server-side. */
+export interface QuoteLineDto {
+  key: string;
+  label: string;
+  /** The working behind the number, e.g. "412 km, 50 free x 1.85". */
+  detail: string | null;
+  amount: number;
+}
+
+export interface QuoteZoneDto {
+  zoneId: string;
+  zoneName: string;
+  /** The code that actually matched — a full postcode or its FSA. */
+  matched: string;
+  via: 'FULL' | 'FSA';
+  input: string;
+}
+
+/**
+ * `ok: false` is an answer, not an error: the card simply does not price that
+ * journey, and `problem` says why in a sentence meant for a person.
+ */
+export interface RateCardQuoteDto {
+  ok: boolean;
+  problem: string | null;
   warnings: string[];
-  preview: true;
+  card: {
+    id: string;
+    name: string;
+    client: { id: string; name: string; code: string };
+    zoneList: { id: string; name: string };
+    validFrom: string;
+    validTo: string;
+    active: boolean;
+    currency: string;
+  };
+  serviceLevel: { id: string; name: string };
+  freightItem: { id: string; name: string };
+  from: QuoteZoneDto | null;
+  to: QuoteZoneDto | null;
+  rate: RouteRateDto | null;
+  lines: QuoteLineDto[];
+  total: number;
+}
+
+export interface QuotePayload {
+  /** Optional context. The destination alone decides the price. */
+  pickupPostalCode?: string;
+  deliveryPostalCode: string;
+  serviceLevelId: string;
+  freightItemId: string;
+  distanceKm?: number;
+  waitMinutes?: number;
+  additionalServiceIds?: string[];
+  /** Which day to judge the card's window against. Defaults to today. */
+  on?: string;
+}
+
+export interface RateCardDetailDto extends RateCardDto {
+  rates: RouteRateDto[];
+}
+
+export interface CreateRateCardPayload {
+  name: string;
+  clientId: string;
+  zoneListId: string;
+  validFrom: string;
+  validTo: string;
+  memo?: string;
+  levyPct?: number;
+}
+
+export interface UpdateRateCardPayload {
+  name?: string;
+  /** Only while the card prices nothing — every stored route points into the old list. */
+  zoneListId?: string;
+  validFrom?: string;
+  validTo?: string;
+  memo?: string | null;
+  active?: boolean;
+  levyPct?: number;
+}
+
+export interface PutRouteRatePayload {
+  serviceLevelId: string;
+  freightItemId: string;
+  toZoneId: string;
+  baseRate?: number;
+  freeKm?: number;
+  ratePerKm?: number;
+  freeWaitMinutes?: number;
+  waitRatePerMinute?: number;
 }
 
 
